@@ -32,6 +32,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -101,6 +103,12 @@ sema_try_down (struct semaphore *sema)
   return success;
 }
 
+bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread* t_a = list_entry(a, struct thread, elem);
+  struct thread* t_b = list_entry(b, struct thread, elem);
+  return t_a->priority > t_b->priority;
+}
+
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
    and wakes up one thread of those waiting for SEMA, if any.
 
@@ -114,9 +122,16 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+    // unblock the thread that has highest priority
+    list_sort (&sema->waiters, sort_by_priority, NULL);
+    struct thread* t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    thread_unblock (t);
   sema->value++;
+  // current thread yields if the unblocked thread has higher priority
+  if (t->priority > thread_current()->priority) {
+    thread_yield();
+  }
   intr_set_level (old_level);
 }
 
@@ -179,6 +194,7 @@ lock_init (struct lock *lock)
 
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
+  list_init (&lock->lock_waiters);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if

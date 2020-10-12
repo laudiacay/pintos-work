@@ -32,8 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -121,17 +119,18 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
+  if (!list_empty (&sema->waiters)) {
     // unblock the thread that has highest priority
-    list_sort (&sema->waiters, sort_by_priority, NULL);
+    // list_sort (&sema->waiters, sort_by_priority, NULL);
     struct thread* t = list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem);
     thread_unblock (t);
-  sema->value++;
-  // current thread yields if the unblocked thread has higher priority
-  if (t->priority > thread_current()->priority) {
-    thread_yield();
+    // current thread yields if the unblocked thread has higher priority
+    // if (t->priority > thread_current()->priority) {
+    //   thread_yield();
+    // }
   }
+  sema->value++;
   intr_set_level (old_level);
 }
 
@@ -214,6 +213,8 @@ lock_acquire (struct lock *lock)
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+
+
 }
 
 /* Tries to acquires LOCK and returns true if successful or false

@@ -208,6 +208,9 @@ timer_interrupt (struct intr_frame *args UNUSED)
       sema_up(&t->sleep_semaphore);
     } else{break;}
   }
+
+  // current thread yields to thread with higher priority in the ready list?
+
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

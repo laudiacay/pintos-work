@@ -201,6 +201,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  thread_yield();
 
   return tid;
 }
@@ -238,7 +239,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, sort_by_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -309,7 +311,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, sort_by_priority, NULL);
+    // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -337,7 +340,12 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-
+  // yields if its no longer the highest priority
+  // list_sort (&ready_list, sort_by_priority, NULL);
+  // struct thread* t = list_entry (list_pop_front (&ready_list), struct thread, elem);
+  // if (new_priority < t->priority) {
+  thread_yield();
+  // }
   
 }
 
@@ -498,7 +506,7 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    list_sort (&ready_list, sort_by_priority, NULL);
+    // list_sort (&ready_list, sort_by_priority, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }
@@ -557,7 +565,7 @@ thread_schedule_tail (struct thread *prev)
    It's not safe to call printf() until thread_schedule_tail()
    has completed. */
 static void
-schedule (void) 
+schedule (void)
 {
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();

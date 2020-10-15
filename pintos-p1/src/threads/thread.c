@@ -339,21 +339,22 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
+// this should be the case for normal priority change, not donation
 void
 thread_set_priority (int new_priority) 
 {
-  //printf("setting prio...");
-  // turn off interrupts so that we don't end up yielding while still figuring things out.
   enum intr_level old_level = intr_disable ();
-  struct thread* t = thread_current();
+  struct thread *t = thread_current();
   int old_priority = t -> priority;
-  // set the underlying base priority
-  t->original_pri = new_priority;
-  // looks like donation is happening, and this is greater than donated priority, so we bump that, too
-  // otherwise the donation continues to override and we just wait.
-  if (t-> original_pri < t->priority && new_priority > t->priority) {
-      t->priority = new_priority; 
+  // donation is not happening, so we bump both
+  if (t->priority == t->original_pri) {
+    t->priority = new_priority;
+    t->original_pri = new_priority;
   }
+  // donation is happening, so we only update the base prio because
+  // we don't want to mess with the donated prio
+  else {t->original_pri = new_priority;}
+
   // we should yield if the active priority decreased.
   bool should_yield = (new_priority < old_priority);
   //printf("mostly set prio...");
@@ -362,7 +363,8 @@ thread_set_priority (int new_priority)
   if (should_yield) {
     thread_yield();
   }
-  
+
+
 }
 
 /* Returns the current thread's priority. */

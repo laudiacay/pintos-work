@@ -394,24 +394,24 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   // disabling interrupts so that current thread stays running through this whole thing
   enum intr_level old_level = intr_disable ();
-  struct thread* t = thread_current();
+  // struct thread* t = thread_current();
   //printf("<a>\n");
   lock->holder = NULL;
-  t = thread_current();
+  // t = thread_current();
   // remove the lock from the thread's locks_held
   //printf("<b>\n");
   list_remove(&lock->elem);
-  t = thread_current();
+  // t = thread_current();
   // set own priority according to locks still held and internal priority
   update_thread_prio_based_on_locks_held();
   //printf("<c>\n");
-  t = thread_current();
+  // t = thread_current();
   intr_set_level(old_level);
   //printf("<d>\n");
-  t = thread_current();
+  // t = thread_current();
   sema_up (&lock->semaphore);
   //printf("<e>\n");
-  t = thread_current();
+  // t = thread_current();
 
   //printf("released a lock...\n");
 }

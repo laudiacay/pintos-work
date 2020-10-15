@@ -85,8 +85,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      //list_insert_ordered (&sema->waiters, &thread_current()->elem, sort_by_priority, NULL);
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered (&sema->waiters, &thread_current()->elem, sort_by_priority, NULL);
+      // list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
   sema->value--;
@@ -127,19 +127,24 @@ sema_try_down (struct semaphore *sema)
 void
 sema_up (struct semaphore *sema) 
 {
-  //printf("we in semaup\n");
   enum intr_level old_level;
 
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) {
-    struct thread* t = list_entry (list_pop_front (&sema->waiters), struct thread, elem);
+    // unblock the thread that has highest priority
+    list_sort (&sema->waiters, sort_by_priority, NULL);
+    struct thread* t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
     thread_unblock (t);
   }
   sema->value++;
+  // can only call thread yield when not in an external interrupt
+  if (!intr_context())
+    thread_yield();
   intr_set_level (old_level);
-  //printf("made it out of semaup\n");
+  
 }
 
 static void sema_test_helper (void *sema_);
@@ -223,7 +228,7 @@ void update_priorities(struct thread *t) {
   // TODO: that is if we ever bother to keep ready_list sorted...
   // if blocker is running, this'll update its prio, itll get downed in a second anyway
   // and update anything that might be blocking it
-  t = blocker->status == THREAD_BLOCKED ? t : NULL;
+  t = blocker->status == THREAD_BLOCKED ? blocker : NULL;
   }
   }
 
@@ -280,7 +285,7 @@ void before_getting_in_line(struct lock* lock) {
       lock -> lock_max_priority = t -> priority;
       // update priorities of everything that's in line in front of this thread, which also are all blocked.
       //printf("<1d>\n");
-      update_waiter_priorities(lock);
+      // update_waiter_priorities(lock);
       //    printf("<finished updating waiter priorities ok>\n");
       // recurse up through current holders and do donations.
       update_priorities(t);
@@ -478,10 +483,10 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  //waiter.priority = thread_current()->priority;
-  list_push_back (&cond->waiters, &waiter.elem);
-  //list_insert_ordered (&cond->waiters, &waiter.elem,
-  //        sort_by_sema_elem_priority, NULL);
+  waiter.priority = thread_current()->priority;
+  // list_push_back (&cond->waiters, &waiter.elem);
+  list_insert_ordered (&cond->waiters, &waiter.elem,
+          sort_by_sema_elem_priority, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);

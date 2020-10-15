@@ -207,8 +207,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
     printf("excuse me 3.\n");
     ASSERT(t != NULL);
     if (t->wakeup_time <= ticks) {
-      enum intr_level old_level = intr_disable();
       printf("excuse me 4.\n");
+      enum intr_level old_level = intr_disable();
       list_remove(e);
       intr_set_level(old_level);
       sema_up(&t->sleep_semaphore);

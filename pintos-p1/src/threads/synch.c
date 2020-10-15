@@ -32,7 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-void recursively_update_priorities(struct thread *t);
+void update_priorities(struct thread *t);
 void update_waiter_priorities(struct lock* lock);
 bool sema_waiter_prio_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 int get_max_waiter_prio(struct lock *lock);
@@ -138,9 +138,6 @@ sema_up (struct semaphore *sema)
     thread_unblock (t);
   }
   sema->value++;
-  // can only call thread yield when not in an external interrupt
-  if (!intr_context())
-    thread_yield();
   intr_set_level (old_level);
   printf("made it out of semaup\n");
 }
@@ -204,10 +201,12 @@ lock_init (struct lock *lock)
 
   lock->holder = NULL;
   sema_init (&lock->semaphore, 1);
+  lock->lock_max_priority = PRI_MIN;
 }
 
 #define THREAD_MAGIC 0xcd6abf4b
-void recursively_update_priorities(struct thread *t) {
+void update_priorities(struct thread *t) {
+  while (t) {
   // assumes the thread's priority has already been bumped to the right value.
   ASSERT(t->original_pri <= t -> priority);
   // blocked, but not by a lock! done donating.
@@ -224,10 +223,9 @@ void recursively_update_priorities(struct thread *t) {
   // TODO: that is if we ever bother to keep ready_list sorted...
   // if blocker is running, this'll update its prio, itll get downed in a second anyway
   // and update anything that might be blocking it
-  if(blocker->status == THREAD_BLOCKED) {
-    recursively_update_priorities(blocker);
+  t = blocker->status == THREAD_BLOCKED ? t : NULL;
   }
-}
+  }
 
 void update_waiter_priorities(struct lock* lock) {
   ASSERT(&lock -> semaphore != NULL);
@@ -285,7 +283,7 @@ void before_getting_in_line(struct lock* lock) {
       update_waiter_priorities(lock);
       //    printf("<finished updating waiter priorities ok>\n");
       // recurse up through current holders and do donations.
-      recursively_update_priorities(t);
+      update_priorities(t);
       //printf("<1f>\n");
 
     }
@@ -322,12 +320,8 @@ lock_acquire (struct lock *lock)
   
   before_getting_in_line(lock);
   printf("<2>\n");
-  // just for shits an giggles. please gcc be chill.
-  barrier();
   sema_down (&lock->semaphore);
   printf("<3>\n");
-
-  barrier();
 
   upon_getting_the_lock(lock);
   printf("<4>\n");
@@ -415,7 +409,6 @@ lock_release (struct lock *lock)
   t = thread_current();
 
   printf("released a lock...\n");
-                     
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -485,10 +478,10 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  waiter.priority = thread_current()->priority;
-  // list_push_back (&cond->waiters, &waiter.elem);
-  list_insert_ordered (&cond->waiters, &waiter.elem,
-          sort_by_sema_elem_priority, NULL);
+  //waiter.priority = thread_current()->priority;
+  list_push_back (&cond->waiters, &waiter.elem);
+  //list_insert_ordered (&cond->waiters, &waiter.elem,
+  //        sort_by_sema_elem_priority, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);

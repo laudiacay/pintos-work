@@ -7,8 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-#include "lib/kernel/list.h"
-
+  
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -30,9 +29,6 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-bool first_wakeup_from_l_elem(const struct list_elem* a, const struct list_elem* b, void* aux);
-
-struct list wait_list;
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -41,7 +37,6 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  list_init(&wait_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,37 +84,16 @@ timer_elapsed (int64_t then)
   return timer_ticks () - then;
 }
 
-bool first_wakeup_from_l_elem(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED) {
-  struct thread* t_a = list_entry(a, struct thread, waitlist_elem);
-  struct thread* t_b = list_entry(b, struct thread, waitlist_elem);
-  return t_a->wakeup_time < t_b->wakeup_time;
-}
-
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
 void
 timer_sleep (int64_t ticks) 
 {
-  /*  int64_t start = timer_ticks ();
-
+  int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
   while (timer_elapsed (start) < ticks) 
     thread_yield ();
-  */
-
-  printf("about to sleep hmmm :)\n");
-  struct thread *t = thread_current ();
-  printf("where am i:)\n");
-  ASSERT(t != NULL);
-  t -> wakeup_time = ticks + timer_ticks();
-
-  ASSERT (intr_get_level () == INTR_ON);
-  enum intr_level old_level = intr_disable();
-  list_insert_ordered(&wait_list, &t->waitlist_elem, first_wakeup_from_l_elem, NULL);
-  intr_set_level(old_level);
-  sema_down(&t->sleep_semaphore);
-  printf("im in the combination pizza hut and taco bell\n");
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -196,26 +170,8 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  printf("in interrupt!\n");
   ticks++;
   thread_tick ();
-  printf("excuse me.\n");
-  while (!list_empty(&wait_list)){
-    printf("excuse me 2.\n");
-    struct list_elem* e = list_front(&wait_list);
-    struct thread* t = list_entry(e, struct thread, waitlist_elem);
-    printf("excuse me 3.\n");
-    ASSERT(t != NULL);
-    if (t->wakeup_time <= ticks) {
-      enum intr_level old_level = intr_disable();
-      printf("excuse me 4.\n");
-      list_remove(e);
-      intr_set_level(old_level);
-      sema_up(&t->sleep_semaphore);
-      printf("excuse me 5.\n");
-    } else{break;}
-  }
-  intr_yield_on_return();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

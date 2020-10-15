@@ -1,9 +1,9 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
+
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,8 +23,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-
-#define DONATE_DEPTH 8  /*limit on depth of nested priority donation*/
 
 /* A kernel thread or user process.
 
@@ -73,7 +71,15 @@ typedef int tid_t;
 
    The first symptom of either of these problems will probably be
    an assertion failure in thread_current(), which checks that
-   the `magic' member of the running thread's `stru blocked state is on a semaphore wait list. */
+   the `magic' member of the running thread's `struct thread' is
+   set to THREAD_MAGIC.  Stack overflow will normally change this
+   value, triggering the assertion. */
+/* The `elem' member has a dual purpose.  It can be an element in
+   the run queue (thread.c), or it can be an element in a
+   semaphore wait list (synch.c).  It can be used these two ways
+   only because they are mutually exclusive: only a thread in the
+   ready state is on the run queue, whereas only a thread in the
+   blocked state is on a semaphore wait list. */
 struct thread
   {
     /* Owned by thread.c. */
@@ -82,12 +88,10 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int original_pri;                   /* original priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list_elem waitlist_elem;     /* List element for wait list */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -96,22 +100,12 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-    /* wakeup time when sleeping */
-    int64_t wakeup_time;
-    /* semaphore we call down on for timer things */
-    struct semaphore sleep_semaphore;
-
-    struct list locks_held; /* list of locks that this thread holds */
-    struct lock* blocked_by; /* which lock is this thread waiting on, if its blocked? */
   };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
-bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
-bool sort_by_sema_elem_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
 
 void thread_init (void);
 void thread_start (void);

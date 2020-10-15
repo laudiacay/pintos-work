@@ -100,6 +100,9 @@ struct thread
     int64_t wakeup_time;
     /* semaphore we call down on for timer things */
     struct semaphore sleep_semaphore;
+
+    struct list locks_held; /* list of locks that this thread holds */
+    struct lock* blocked_by; /* which lock is this thread waiting on, if its blocked? */
   };
 
 /* If false (default), use round-robin scheduler.

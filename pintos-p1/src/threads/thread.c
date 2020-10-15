@@ -123,7 +123,9 @@ thread_start (void)
 void
 thread_tick (void) 
 {
+  printf("in thread_tick\n");
   struct thread *t = thread_current ();
+  printf("made it past thread_current in thread_tick\n");
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -239,8 +241,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  // list_push_back (&ready_list, &t->elem);
-  list_insert_ordered (&ready_list, &t->elem, sort_by_priority, NULL);
+  list_push_back (&ready_list, &t->elem);
+  //list_insert_ordered (&ready_list, &t->elem, sort_by_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -259,15 +261,16 @@ struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
-  
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
      have overflowed its stack.  Each thread has less than 4 kB
      of stack, so a few big automatic arrays or moderate
      recursion can cause stack overflow. */
-  ASSERT (is_thread (t));
-  ASSERT (t->status == THREAD_RUNNING);
-
+  //if (t->magic != THREAD_MAGIC) {
+  //  printf("running breaky thread: %x", t);
+  //}
+  ASSERT(t->status == THREAD_RUNNING);
+  ASSERT(is_thread(t));
   return t;
 }
 
@@ -311,8 +314,8 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, sort_by_priority, NULL);
-    // list_push_back (&ready_list, &cur->elem);
+    //list_insert_ordered (&ready_list, &cur->elem, sort_by_priority, NULL);
+    list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -339,20 +342,33 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
-  // yields if its no longer the highest priority
-  // list_sort (&ready_list, sort_by_priority, NULL);
-  // struct thread* t = list_entry (list_pop_front (&ready_list), struct thread, elem);
-  // if (new_priority < t->priority) {
-  thread_yield();
-  // }
-  
+  printf("setting prio...");
+  // turn off interrupts so that we don't end up yielding while still figuring things out.
+  enum intr_level old_level = intr_disable ();
+  struct thread* t = thread_current();
+  int old_priority = t -> priority;
+  // set the underlying base priority
+  t->original_pri = new_priority;
+  // looks like donation is happening, and this is greater than donated priority, so we bump that, too
+  // otherwise the donation continues to override and we just wait.
+  if (t-> original_pri < t->priority && new_priority > t->priority) {
+      t->priority = new_priority; 
+  }
+  // we should yield if the active priority decreased.
+  bool should_yield = (new_priority < old_priority);
+  printf("mostly set prio...");
+  intr_set_level(old_level);
+
+  if (should_yield) {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
+  printf("getting prio...");
   return thread_current ()->priority;
 }
 
@@ -474,7 +490,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t -> wakeup_time = 0;
   sema_init(&t->sleep_semaphore, 0);
+
   t->priority = priority;
+  t->original_pri = priority;
+  list_init(&t->locks_held);
+  t->blocked_by = NULL;
+
   t->magic = THREAD_MAGIC;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

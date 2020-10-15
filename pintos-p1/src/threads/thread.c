@@ -526,7 +526,7 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    // list_sort (&ready_list, sort_by_priority, NULL);
+    list_sort (&ready_list, sort_by_priority, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }

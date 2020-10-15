@@ -108,9 +108,9 @@ timer_sleep (int64_t ticks)
     thread_yield ();
   */
 
-  printf("about to sleep hmmm :)\n");
+  //printf("about to sleep hmmm :)\n");
   struct thread *t = thread_current ();
-  printf("where am i:)\n");
+  //printf("where am i:)\n");
   ASSERT(t != NULL);
   t -> wakeup_time = ticks + timer_ticks();
 
@@ -119,7 +119,7 @@ timer_sleep (int64_t ticks)
   list_insert_ordered(&wait_list, &t->waitlist_elem, first_wakeup_from_l_elem, NULL);
   intr_set_level(old_level);
   sema_down(&t->sleep_semaphore);
-  printf("im in the combination pizza hut and taco bell\n");
+  //printf("im in the combination pizza hut and taco bell\n");
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -196,23 +196,23 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  printf("in interrupt!\n");
+  //printf("in interrupt!\n");
   ticks++;
   thread_tick ();
-  printf("excuse me.\n");
+  //printf("excuse me.\n");
   while (!list_empty(&wait_list)){
-    printf("excuse me 2.\n");
+    //printf("excuse me 2.\n");
     struct list_elem* e = list_front(&wait_list);
     struct thread* t = list_entry(e, struct thread, waitlist_elem);
-    printf("excuse me 3.\n");
+    //printf("excuse me 3.\n");
     ASSERT(t != NULL);
     if (t->wakeup_time <= ticks) {
-      printf("excuse me 4.\n");
+      //printf("excuse me 4.\n");
       enum intr_level old_level = intr_disable();
       list_remove(e);
       intr_set_level(old_level);
       sema_up(&t->sleep_semaphore);
-      printf("excuse me 5.\n");
+      //printf("excuse me 5.\n");
     } else{break;}
   }
   intr_yield_on_return();

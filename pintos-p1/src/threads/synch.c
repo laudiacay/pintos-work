@@ -76,7 +76,7 @@ sema_init (struct semaphore *sema, unsigned value)
 void
 sema_down (struct semaphore *sema) 
 {
-  printf("we in semadown\n");
+  //printf("we in semadown\n");
   enum intr_level old_level;
 
   ASSERT (sema != NULL);
@@ -91,7 +91,7 @@ sema_down (struct semaphore *sema)
     }
   sema->value--;
   intr_set_level (old_level);
-  printf("made it out of semadown\n");
+  //printf("made it out of semadown\n");
 }
 
 /* Down or "P" operation on a semaphore, but only if the
@@ -127,7 +127,7 @@ sema_try_down (struct semaphore *sema)
 void
 sema_up (struct semaphore *sema) 
 {
-  printf("we in semaup\n");
+  //printf("we in semaup\n");
   enum intr_level old_level;
 
   ASSERT (sema != NULL);
@@ -139,7 +139,7 @@ sema_up (struct semaphore *sema)
   }
   sema->value++;
   intr_set_level (old_level);
-  printf("made it out of semaup\n");
+  //printf("made it out of semaup\n");
 }
 
 static void sema_test_helper (void *sema_);
@@ -312,22 +312,22 @@ void upon_getting_the_lock(struct lock* lock) {
    we need to sleep. */
 void
 lock_acquire (struct lock *lock)
-{ printf("acquiring a lock\n");
+{ //printf("acquiring a lock\n");
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  printf("<1>\n");
+  //printf("<1>\n");
   
   before_getting_in_line(lock);
-  printf("<2>\n");
+  //printf("<2>\n");
   sema_down (&lock->semaphore);
-  printf("<3>\n");
+  //printf("<3>\n");
 
   upon_getting_the_lock(lock);
-  printf("<4>\n");
+  //printf("<4>\n");
 
   lock->holder = thread_current ();
-  printf("hooray motherfuckers\n");
+  //printf("hooray motherfuckers\n");
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -341,7 +341,7 @@ lock_try_acquire (struct lock *lock)
 {
   bool success;
 
-  printf("trying to acquire.\n");
+  //printf("trying to acquire.\n");
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
 
@@ -351,7 +351,7 @@ lock_try_acquire (struct lock *lock)
     list_push_front(&t->locks_held, &lock->elem);
     lock->holder = t;
   }
-  printf("survived trying to acquire.\n");
+  //printf("survived trying to acquire.\n");
   return success;
 }
 
@@ -384,31 +384,31 @@ void update_thread_prio_based_on_locks_held(void) {
 void
 lock_release (struct lock *lock) 
 {
-  printf("releasing a lock...\n");
+  //printf("releasing a lock...\n");
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
   // disabling interrupts so that current thread stays running through this whole thing
   enum intr_level old_level = intr_disable ();
   struct thread* t = thread_current();
-  printf("<a>\n");
+  //printf("<a>\n");
   lock->holder = NULL;
   t = thread_current();
   // remove the lock from the thread's locks_held
-  printf("<b>\n");
+  //printf("<b>\n");
   list_remove(&lock->elem);
   t = thread_current();
   // set own priority according to locks still held and internal priority
   update_thread_prio_based_on_locks_held();
-  printf("<c>\n");
+  //printf("<c>\n");
   t = thread_current();
   intr_set_level(old_level);
-  printf("<d>\n");
+  //printf("<d>\n");
   t = thread_current();
   sema_up (&lock->semaphore);
-  printf("<e>\n");
+  //printf("<e>\n");
   t = thread_current();
 
-  printf("released a lock...\n");
+  //printf("released a lock...\n");
 }
 
 /* Returns true if the current thread holds LOCK, false

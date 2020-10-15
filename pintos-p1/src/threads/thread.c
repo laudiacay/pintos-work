@@ -123,9 +123,9 @@ thread_start (void)
 void
 thread_tick (void) 
 {
-  printf("in thread_tick\n");
+  //printf("in thread_tick\n");
   struct thread *t = thread_current ();
-  printf("made it past thread_current in thread_tick\n");
+  //printf("made it past thread_current in thread_tick\n");
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -341,7 +341,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  printf("setting prio...");
+  //printf("setting prio...");
   // turn off interrupts so that we don't end up yielding while still figuring things out.
   enum intr_level old_level = intr_disable ();
   struct thread* t = thread_current();
@@ -355,7 +355,7 @@ thread_set_priority (int new_priority)
   }
   // we should yield if the active priority decreased.
   bool should_yield = (new_priority < old_priority);
-  printf("mostly set prio...");
+  //printf("mostly set prio...");
   intr_set_level(old_level);
 
   if (should_yield) {
@@ -367,7 +367,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  printf("getting prio...");
+  //printf("getting prio...");
   return thread_current ()->priority;
 }
 
@@ -526,7 +526,7 @@ next_thread_to_run (void)
     return idle_thread;
   }
   else {
-    list_sort (&ready_list, sort_by_priority, NULL);
+    //list_sort (&ready_list, sort_by_priority, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
 }

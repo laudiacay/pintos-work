@@ -32,6 +32,12 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED) {
+  struct thread* t_a = list_entry(a, struct thread, elem);
+  struct thread* t_b = list_entry(b, struct thread, elem);
+  return t_a->priority > t_b->priority;
+}
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -100,12 +106,6 @@ sema_try_down (struct semaphore *sema)
   intr_set_level (old_level);
 
   return success;
-}
-
-bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED) {
-  struct thread* t_a = list_entry(a, struct thread, elem);
-  struct thread* t_b = list_entry(b, struct thread, elem);
-  return t_a->priority > t_b->priority;
 }
 
 /* Up or "V" operation on a semaphore.  Increments SEMA's value
@@ -269,7 +269,14 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    int priority;
   };
+
+bool sort_by_sema_elem_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED) {
+  struct semaphore_elem* s_a = list_entry(a, struct semaphore_elem, elem);
+  struct semaphore_elem* s_b = list_entry(b, struct semaphore_elem, elem);
+  return s_a->priority > s_b->priority;
+}
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -313,9 +320,10 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
+  waiter.priority = thread_current()->priority;
   // list_push_back (&cond->waiters, &waiter.elem);
   list_insert_ordered (&cond->waiters, &waiter.elem,
-          sort_by_priority, NULL);
+          sort_by_sema_elem_priority, NULL);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -339,8 +347,8 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   if (!list_empty (&cond->waiters)) {
     // wake the thread with highest priority
     // list_sort (&cond->waiters, sort_by_priority, NULL);
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+    struct semaphore_elem* t = list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem);
+    sema_up (&t->semaphore);
   }
     
 }

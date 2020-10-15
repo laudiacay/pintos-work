@@ -108,6 +108,7 @@ struct thread
 extern bool thread_mlfqs;
 
 bool sort_by_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
+bool sort_by_sema_elem_priority(const struct list_elem* a, const struct list_elem *b, void *aux UNUSED);
 
 void thread_init (void);
 void thread_start (void);

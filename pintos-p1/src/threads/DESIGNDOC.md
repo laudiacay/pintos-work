@@ -31,8 +31,8 @@ Kate Hu            katehu@uchicago.edu
 
 New members in struct thread:
 1. int64_t wakeup_time: tracks the wakeup time of a sleeping thread
-2. struct semaphore sleep_semaphore: used to put a thread to sleep or
-   to wake up a thread
+2. struct semaphore sleep_semaphore: keeps track of a binary value
+	that indicates whether the thread is sleeping or not
 3. struct list_elem waitlist_elem: list element that goes into the
    wait list of sleeping threads
 
@@ -84,7 +84,7 @@ global wait list.
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
-
+???
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -95,20 +95,75 @@ global wait list.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+New members in struct lock:
+1. struct list_elem elem: list element that goes in lock holder's
+	list of locks it holds
+2. int lock_max_priority: tracks current maximum priority that
+	holding this lock would give a thread
+
+New members in struct semaphore_elem:
+1. struct list_elem elem: list element that goes in the cond waiter list
+2. struct semaphore semaphore: keeps track of a binary value that
+	indicates whether the condition variable is available or not. It
+	also contains a semaphore waitlist that contains threads waiting for
+	the condition variable.
+3. int priority: keeps track of the cond waiter's priority
+
+New members in struct thread:
+1. int original_pri: keeps track of the thread's priority that is not 
+	donated
+2. int priority: keeps track of the thread's donated priority. If there
+	is no donated priority, it equals original_pri
+3. struct list locks_held: tracks the list of locks that this thread holds
+4. struct lock* blocked_by: tracks which lock this thread is waiting on
+
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+???
 
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+A thread is inserted into the waiter list according to its priority
+so that the highest priority thread is always at the front of the list.
+To take care of the case where a thread's priority is updated due to
+priority donation while it is still in the waiter list, we first sort
+the waiter list before returning the first element in it when we wake 
+up a thread.
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+The lock is set to be the lock that this thread is waiting on. If this
+thread has a higher priority than the lock's current priority that it
+should give its holder, update that priority to be the thread's priority.
+Then the thread's priority is recursed up along the donation chain:
+this thread gives its priority to its blocker (the holder of the lock
+that this thread is waiting on,) and the blocker gives its priority to
+its blocker, and so on, until we reach a blocker that is not waiting
+on any lock. Then we sort the ready list in case that any thread that
+is already in the ready list gets an updated priority. Finally this thread
+is inserted into the lock's waiter list. 
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+The lock's holder is set to be NULL. The lock is also removed from the
+caller thread's list of locks that it holds. Then we set this thread's
+priority based on the list of locks it still holds and its own base
+priority. From the list of locks it still holds, we find the lock with
+the maximum priority that a thread needs to have while holding this
+lock. If the thread is not holding any lock, it means that it is not
+blocking any thread and it won't have donated priority, then its 
+priority is set to be its base priority. If there is such a lock,
+we set the thread's priority to be the priority associated with this lock.
+Finally we call sema up on the sempahore of the lock that just gets
+released to wake up the highest priority thread that is waiting on this lock.
 
 ---- SYNCHRONIZATION ----
 
@@ -116,10 +171,14 @@ global wait list.
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+??? not sure why there would be race condition in set priority
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+???
 
 			  ADVANCED SCHEDULER
 			  ==================

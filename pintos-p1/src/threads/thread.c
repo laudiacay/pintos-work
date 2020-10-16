@@ -203,7 +203,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  thread_yield();
+  if (priority > thread_current()->priority) {
+    thread_yield();
+  }
 
   return tid;
 }
@@ -241,9 +243,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  // list_push_back (&ready_list, &t->elem);
   list_insert_ordered (&ready_list, &t->elem, sort_by_priority, NULL);
   t->status = THREAD_READY;
+
   intr_set_level (old_level);
 }
 
@@ -533,6 +535,11 @@ next_thread_to_run (void)
     //list_sort (&ready_list, sort_by_priority, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
   }
+}
+
+void
+sort_ready_list(void) {
+  list_sort (&ready_list, sort_by_priority, NULL);
 }
 
 /* Completes a thread switch by activating the new thread's page

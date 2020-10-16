@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Claudia Richoux    laudecay@uchicago.edu
+Kate Hu            katehu@uchicago.edu
 
 ---- PRELIMINARIES ----
 
@@ -30,26 +29,62 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+New members in struct thread:
+1. int64_t wakeup_time: tracks the wakeup time of a sleeping thread
+2. struct semaphore sleep_semaphore: used to put a thread to sleep or
+   to wake up a thread
+3. struct list_elem waitlist_elem: list element that goes into the
+   wait list of sleeping threads
+
+struct list wait_list: keeps track of the list of sleeping threads
+
+bool first_wakeup_from_l_elem(const struct list_elem* a,
+		const struct list_elem* b, void* aux):
+a function to compare two threads using their wake up time when
+inserting into the wait list
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+In timer_sleep(), the current thread's wake up time is calculated
+and stored. It is then put to sleep and inserted into a list of
+sleeping threads sorted by their wake up times. The timer
+interrupt handler wakes up any thread in the list of sleeping
+threads that needs to wake up.
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+We use ordered insert when inserting threads into the wait list so
+that the list is always sorted, with the thread that has the earliest
+wake up time being at the front. In this way when we search for 
+threads to wake up in timer interrupt handler, we can traverse the
+wait list starting at the front and break immediately when we
+encounter a thread that shouldn't wake up.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+???
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+We disabled interrupts to protect inserting a thread into the wait
+list, so the thread won't be interrupted when it's accessing the
+global wait list.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+
 
 			 PRIORITY SCHEDULING
 			 ===================

@@ -229,7 +229,9 @@ void update_priorities(struct thread *t) {
   // if blocker is running, this'll update its prio, itll get downed in a second anyway
   // and update anything that might be blocking it
   t = blocker->status == THREAD_BLOCKED ? blocker : NULL;
+  // t = blocker;
   }
+  sort_ready_list();
   }
 
 void update_waiter_priorities(struct lock* lock) {

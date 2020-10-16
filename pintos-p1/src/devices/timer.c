@@ -215,7 +215,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
       //printf("excuse me 5.\n");
     } else{break;}
   }
-  intr_yield_on_return();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

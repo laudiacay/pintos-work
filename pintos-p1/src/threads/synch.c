@@ -143,6 +143,8 @@ sema_up (struct semaphore *sema)
   // can only call thread yield when not in an external interrupt
   if (!intr_context())
     thread_yield();
+  else
+    intr_yield_on_return();
   intr_set_level (old_level);
   
 }

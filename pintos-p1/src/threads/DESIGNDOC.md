@@ -70,7 +70,10 @@ encounter a thread that shouldn't wake up.
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
-???
+we disable interrupts while modifying the wait_list, so no two threads
+can end up modifying it at the same time. it's fine if two threads are in
+timer_sleep at the same time, as long the waitlist is only edited by one
+thread at a time.
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
@@ -84,7 +87,9 @@ global wait list.
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
-???
+we didn't really consider other designs, we just followed the instructions
+in the guide- they were pretty specific to say exactly what we should do.
+this seems to be approximately optimal, though.
 
 			 PRIORITY SCHEDULING
 			 ===================
@@ -122,7 +127,13 @@ New members in struct thread:
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
 
-???
+we used a list of locks held by a given thread, and the locks have a variable
+that's updated by threads in the waitlist/holding it to compute what the highest
+priority they can give to their holder is. then, the thread in question will
+update its own priority according to the highest priority lock in its held list
+or its own original priority.
+
+png file attached.
 
 ---- ALGORITHMS ----
 
@@ -142,7 +153,7 @@ up a thread.
 The lock is set to be the lock that this thread is waiting on. If this
 thread has a higher priority than the lock's current priority that it
 should give its holder, update that priority to be the thread's priority.
-Then the thread's priority is recursed up along the donation chain:
+Then the thread's priority is iterated up along the donation chain:
 this thread gives its priority to its blocker (the holder of the lock
 that this thread is waiting on,) and the blocker gives its priority to
 its blocker, and so on, until we reach a blocker that is not waiting
@@ -171,14 +182,27 @@ released to wake up the highest priority thread that is waiting on this lock.
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
-??? not sure why there would be race condition in set priority
+yes, if a donation took place after the if statement where t's priority gets checked
+against original_pri, but before the function exited, the donation would effectively be
+undone by the inside of that if statement. we just disabled interrupts around it, which is
+no problem because this operation is relatively quick.
+no, we could not have used a lock for this- the code that would be racing with it
+would have been inside the lock_acquire function. how's /that/ going to work?
 
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
-???
+having the locks memoize priority by using some of the invariants about when
+priority will be monotonically increasing or decreasing really increased
+efficiency of computing a thread's priority. i started with a much more complex
+design that would do a lot more updating of other threads' priorities
+but then i realized that there were a lot of restrictions on thread state
+when donations occur (because only one thread can DO the blocking of another at a time,
+and it must be itself blocked by another thread or else it is in the ready list).
+this allowed me to just throw away a lot of my old design and a lot of places i'd be changing priorities,
+and basically do a ton of lazy evaluation.
 
 			  ADVANCED SCHEDULER
 			  ==================

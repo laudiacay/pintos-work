@@ -30,7 +30,7 @@ char* space = " ";
    put some bs here about argument passing and tokenizing, i suppose
 */
 tid_t
-process_execute (const char *args_string) 
+process_execute (const char *file_name) 
 {
   char *fn_copy;
   tid_t tid;
@@ -38,7 +38,7 @@ process_execute (const char *args_string)
   char *strtok_r_thing;
 
   // TODO: parse the rest of the arguments once you figure out where to put them
-  char* file_name = strtok_r((char*)args_string, space, &strtok_r_thing);
+  //char* file_name = strtok_r((char*)args_string, space, &strtok_r_thing);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */

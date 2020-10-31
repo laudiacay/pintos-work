@@ -20,6 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void *push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size);
 
 char* space = " ";
 
@@ -34,11 +35,6 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
-  char *strtok_r_thing;
-
-  // TODO: parse the rest of the arguments once you figure out where to put them
-  //char* file_name = strtok_r((char*)args_string, space, &strtok_r_thing);
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -207,7 +203,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, const char *cmdline);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -312,9 +308,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -436,23 +431,85 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static void *
+push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size)
+{
+  size_t padsize = ROUND_UP (size, sizeof (uint32_t));
+  if (*ofs < padsize)
+    return NULL;
+
+  *ofs -= padsize;
+  memcpy (kpage + *ofs + (padsize - size), buf, size);
+  return kpage + *ofs + (padsize - size);
+}
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, const char *cmdline) 
 {
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE - 12;
-      else
-        palloc_free_page (kpage);
+  {
+    success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+    if (success) {
+      *esp = PHYS_BASE - 12;
     }
+    else {
+      palloc_free_page (kpage);
+      return success;
+    }
+  }
+
+  if (sizeof(cmdline) > PGSIZE) {
+    return NULL;
+  }
+
+  //parse command line and save to parsed_args
+  int MAX_ARGC = PGSIZE/sizeof(char*);
+  char* token;
+  char* saveptr;
+  char** parsed_args = malloc(MAX_ARGC*sizeof(char*));
+  int argc = 0;
+  for (token = strtok_r((char*)cmdline, " ", &saveptr); token != NULL; 
+        token = strtok_r(NULL, " ", &saveptr)) {
+    parsed_args[argc] = token;
+    argc++;
+    if (argc >= MAX_ARGC) {
+      return false;
+    }
+  }
+  printf("arg count = %d\n", argc);
+
+  //push cmd args to stack and copy address to argv
+  int i = 0;
+  int byte_size = 0;
+  char** argv = malloc((argc+1)*sizeof(char*));
+  for (i = argc-1; i >= 0; i--) {
+    *esp -= strlen (parsed_args[i] + 1);
+    push (kpage, *esp, parsed_args[i], strlen (parsed_args[i] + 1));
+    argv[i] = *esp;
+  }
+  argv[argc] = 0;
+
+  // push argv[i]
+  for (i = argc; i >= 0; i--){
+    *esp -= sizeof(char*);
+    push (kpage, *esp, &argv[i], sizeof(char*));
+  }
+  // push argv
+  *esp -= sizeof (char**);
+  push (kpage, *esp, esp, sizeof(char**));
+  // push argc
+  *esp -= sizeof (int);
+  push (kpage, *esp, &argc, sizeof(int));
+  // push fake return address
+  *esp -= sizeof(void*);
+  push (kpage, *esp, &argv[argc], sizeof (void*));
+
   return success;
 }
 

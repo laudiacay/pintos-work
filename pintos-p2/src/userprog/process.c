@@ -473,32 +473,26 @@ setup_stack (void **esp, const char *cmdline)
   char* saveptr;
   int argc = 0;
   int strlen_arg = 0;
-  printf("esp = %p\n", *esp);
   for (token = strtok_r((char*)cmdline, " ", &saveptr); token != NULL; 
         token = strtok_r(NULL, " ", &saveptr)) {
     strlen_arg =(strlen(token) + 1) * sizeof(char);
     *esp -= strlen_arg;
-    printf("after pushing first arg, esp = %p\n", *esp);
     memcpy(*esp, token, strlen_arg);
-    printf("last arg should be at esp, arg = %s\n", (char*)*esp);
     argc++;
     if (argc >= MAX_ARGC) {
       return false;
     }
   }
 
-  printf("arg count = %d\n", argc);
   char* argv_tracker = *esp;
 
   // word_align and push argv[argc]
   int word_align = (int)(*esp) % sizeof(char*);
   *esp -= word_align;
   memset(*esp, 0, word_align);
-  printf("post word align esp = %p\n", *esp);
   
   *esp -= 4;
   memset(*esp, 0, 4);
-  printf("post argv[argc ]esp = %p\n", *esp);
 
   void* top_of_argv = *esp - argc * sizeof(void*);
   *esp = top_of_argv;
@@ -507,9 +501,6 @@ setup_stack (void **esp, const char *cmdline)
     memcpy(*esp, &argv_tracker, 4);
     *esp += sizeof (char*);
     argv_tracker += strlen(argv_tracker) + 1;
-    printf("after pushing arg addr = %p\n", *esp);
-    printf("arg addr = %p\n", argv_tracker);
-    printf("what got pushed = %p\n", *(void**)*esp);
     // TODO add printfs?
   }
   *esp = top_of_argv;

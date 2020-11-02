@@ -10,6 +10,7 @@
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
 static int sys_write (uint8_t*);
+static int sys_exit (uint8_t*);
 //static char * copy_in_string (const char *);
 void
 syscall_init (void) 
@@ -28,6 +29,8 @@ syscall_handler (struct intr_frame *f)
 
   switch (call_nr) {
   case SYS_WRITE: syscall = sys_write;
+    break;
+  case SYS_EXIT: syscall = sys_exit;
     break;
   default:
     syscall = NULL;
@@ -66,6 +69,15 @@ static int sys_write (uint8_t* args_start) {
     retval = file_write(fd, buffer, size);
   }
   return retval;
+}
+
+static int sys_exit(uint8_t* args_start) {
+  int status_code;
+
+  copy_in (&status_code, args_start, sizeof(int));
+  thread_exit ();
+
+  return status_code;
 }
 
 

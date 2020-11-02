@@ -501,7 +501,6 @@ setup_stack (void **esp, const char *cmdline)
     memcpy(*esp, &argv_tracker, 4);
     *esp += sizeof (char*);
     argv_tracker += strlen(argv_tracker) + 1;
-    // TODO add printfs?
   }
   *esp = top_of_argv;
 

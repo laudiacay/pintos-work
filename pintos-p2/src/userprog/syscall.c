@@ -75,6 +75,8 @@ static int sys_exit(uint8_t* args_start) {
   int status_code;
 
   copy_in (&status_code, args_start, sizeof(int));
+  struct thread *cur = thread_current ();
+  cur->exitstatus = status_code;
   thread_exit ();
 
   return status_code;

@@ -28,7 +28,6 @@ char* space = " ";
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created.
-   put some bs here about argument passing and tokenizing, i suppose
 */
 tid_t
 process_execute (const char *file_name) 
@@ -91,12 +90,27 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  //  return -1;
-  // ok i was told to make this an infinite loop
-  while(1);
-  return -1;
+  struct thread cur = thread_current();
+
+  struct thread* child;
+  struct list_elem *e;
+
+  for (e = list_begin (&foo_list); e != list_end (&foo_list);
+       e = list_next (e))
+    {
+      child = list_entry (e, struct thread, child_elem);
+      if (is_thread(child) && child -> tid == child_tid) {
+        lock_acquire(child->done_lock);
+        cond_wait(child->status == THREAD_EXITING, &child->done_lock);
+        lock_release (&child->done_lock);
+        int ret = child -> exitstatus;
+        palloc_free_page(child);
+        return ret;
+      }
+    }
+   return -1;
 }
 
 /* Free the current process's resources. */
@@ -111,6 +125,8 @@ process_exit (void)
   pd = cur->pagedir;
   if (pd != NULL) 
     {
+
+      
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
@@ -121,7 +137,10 @@ process_exit (void)
       cur->pagedir = NULL;
       pagedir_activate (NULL);
       pagedir_destroy (pd);
+      printf ("%s: exit(%d)\n", cur->name, cur->exitstatus);
     }
+
+
 }
 
 /* Sets up the CPU for running user code in the current
@@ -473,8 +492,12 @@ setup_stack (void **esp, const char *cmdline)
   char* saveptr;
   int argc = 0;
   int strlen_arg = 0;
-  for (token = strtok_r((char*)cmdline, " ", &saveptr); token != NULL; 
+  struct thread *cur = thread_current ();
+  bool first = true;
+  for (token = strtok_r((char*)cmdline, " ", &saveptr); token != NULL;
         token = strtok_r(NULL, " ", &saveptr)) {
+    if (first) strlcpy(cur->name, token, 60);
+    first = false;
     strlen_arg =(strlen(token) + 1) * sizeof(char);
     *esp -= strlen_arg;
     memcpy(*esp, token, strlen_arg);

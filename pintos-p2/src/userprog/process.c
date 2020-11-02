@@ -456,59 +456,75 @@ setup_stack (void **esp, const char *cmdline)
   {
     success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
     if (success) {
-      *esp = PHYS_BASE - 12;
+      *esp = PHYS_BASE;
     }
     else {
       palloc_free_page (kpage);
       return success;
     }
-  }
+  } else {return false;}
 
   if (sizeof(cmdline) > PGSIZE) {
-    return NULL;
+    return false;
   }
 
-  //parse command line and save to parsed_args
   int MAX_ARGC = PGSIZE/sizeof(char*);
   char* token;
   char* saveptr;
-  char** parsed_args = malloc(MAX_ARGC*sizeof(char*));
   int argc = 0;
+  int strlen_arg = 0;
+  printf("esp = %p\n", *esp);
   for (token = strtok_r((char*)cmdline, " ", &saveptr); token != NULL; 
         token = strtok_r(NULL, " ", &saveptr)) {
-    parsed_args[argc] = token;
+    strlen_arg =(strlen(token) + 1) * sizeof(char);
+    *esp -= strlen_arg;
+    printf("after pushing first arg, esp = %p\n", *esp);
+    memcpy(*esp, token, strlen_arg);
+    printf("last arg should be at esp, arg = %s\n", (char*)*esp);
     argc++;
     if (argc >= MAX_ARGC) {
       return false;
     }
   }
+
   printf("arg count = %d\n", argc);
+  char* argv_tracker = *esp;
 
+  // word_align and push argv[argc]
+  int word_align = (int)(*esp) % sizeof(char*);
+  *esp -= word_align;
+  memset(*esp, 0, word_align);
+  printf("post word align esp = %p\n", *esp);
+  
+  *esp -= 4;
+  memset(*esp, 0, 4);
+  printf("post argv[argc ]esp = %p\n", *esp);
+
+  void* top_of_argv = *esp - argc * sizeof(void*);
+  *esp = top_of_argv;
   //push cmd args to stack and copy address to argv
-  int i = 0;
-  int byte_size = 0;
-  char** argv = malloc((argc+1)*sizeof(char*));
-  for (i = argc-1; i >= 0; i--) {
-    *esp -= strlen (parsed_args[i] + 1);
-    push (kpage, *esp, parsed_args[i], strlen (parsed_args[i] + 1));
-    argv[i] = *esp;
+  for (int i = argc-1; i >= 0; i--) {
+    memcpy(*esp, &argv_tracker, 4);
+    *esp += sizeof (char*);
+    argv_tracker += strlen(argv_tracker) + 1;
+    printf("after pushing arg addr = %p\n", *esp);
+    printf("arg addr = %p\n", argv_tracker);
+    printf("what got pushed = %p\n", *(void**)*esp);
+    // TODO add printfs?
   }
-  argv[argc] = 0;
+  *esp = top_of_argv;
 
-  // push argv[i]
-  for (i = argc; i >= 0; i--){
-    *esp -= sizeof(char*);
-    push (kpage, *esp, &argv[i], sizeof(char*));
-  }
   // push argv
-  *esp -= sizeof (char**);
-  push (kpage, *esp, esp, sizeof(char**));
+  *esp -= sizeof (char*);
+  memcpy(*esp, &top_of_argv, 4);
+
   // push argc
   *esp -= sizeof (int);
-  push (kpage, *esp, &argc, sizeof(int));
+  memcpy(*esp, &argc, sizeof(int));
   // push fake return address
-  *esp -= sizeof(void*);
-  push (kpage, *esp, &argv[argc], sizeof (void*));
+  argc = 0;
+  *esp -= sizeof(char*);
+  memcpy(*esp, &argc, sizeof (void*));
 
   return success;
 }

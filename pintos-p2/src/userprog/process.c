@@ -96,7 +96,6 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  printf("in waitttt\n");
   struct thread *cur = thread_current();
 
   struct thread* child;
@@ -120,9 +119,7 @@ process_wait (tid_t child_tid)
 
   // TODO:return -1 if killed by kernel?
 
-  printf("kernel thread about to sleep and wait.....\n");
   sema_down(&child->exit_semaphore);
-  printf("kernel thread continues.....\n");
 
   int ret = child -> exitstatus;
   // TODO: we should free the resources, idk why the following causes page fault
@@ -138,7 +135,6 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  printf("process exiting....!\n");
   sema_up(&cur->exit_semaphore);
 
   /* Destroy the current process's page directory and switch back
@@ -270,7 +266,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  char file_name_copy[60];
+  strlcpy(file_name_copy, file_name, 60);
+  char* save_ptr;
+  char* file_name_real = strtok_r ( file_name_copy, " ", &save_ptr);
+  file = filesys_open (file_name_real);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -525,18 +525,23 @@ setup_stack (void **esp, const char *cmdline)
   
   *esp -= 4;
   memset(*esp, 0, 4);
+  *esp -= 4;
+  memset(*esp, 0, 4);
 
   void* top_of_argv = *esp - argc * sizeof(void*);
-  *esp = top_of_argv;
+  //*esp = top_of_argv;
   //push cmd args to stack and copy address to argv
   for (int i = argc-1; i >= 0; i--) {
     memcpy(*esp, &argv_tracker, 4);
-    *esp += sizeof (char*);
+    //*esp += sizeof (char*);
+    *esp -= sizeof(char*);
     argv_tracker += strlen(argv_tracker) + 1;
   }
   *esp = top_of_argv;
-
+  //*esp -= sizeof (char*);
+  
   // push argv
+  top_of_argv += 4;
   *esp -= sizeof (char*);
   memcpy(*esp, &top_of_argv, 4);
 

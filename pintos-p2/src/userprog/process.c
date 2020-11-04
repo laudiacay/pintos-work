@@ -17,10 +17,10 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static void *push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size);
 
 char* space = " ";
 
@@ -46,6 +46,9 @@ process_execute (const char *file_name)
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+  // TODO: the guide says locking is needed here??
+
   return tid;
 }
 
@@ -64,6 +67,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -92,25 +96,39 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread cur = thread_current();
+  printf("in waitttt\n");
+  struct thread *cur = thread_current();
 
   struct thread* child;
   struct list_elem *e;
 
-  for (e = list_begin (&foo_list); e != list_end (&foo_list);
+  for (e = list_begin (&cur->children); e != list_end (&cur->children);
        e = list_next (e))
-    {
-      child = list_entry (e, struct thread, child_elem);
-      if (is_thread(child) && child -> tid == child_tid) {
-        lock_acquire(child->done_lock);
-        cond_wait(child->status == THREAD_EXITING, &child->done_lock);
-        lock_release (&child->done_lock);
-        int ret = child -> exitstatus;
-        palloc_free_page(child);
-        return ret;
-      }
-    }
-   return -1;
+  {
+
+    child = list_entry (e, struct thread, child_elem);
+    if (child -> tid == child_tid)
+      break;
+    else
+      child = NULL;
+  }
+  if (child == NULL)
+    return -1;
+  if (child->waitedfor == 1)
+    return -1;
+  child->waitedfor = 1;
+
+  // TODO:return -1 if killed by kernel?
+
+  printf("kernel thread about to sleep and wait.....\n");
+  sema_down(&child->exit_semaphore);
+  printf("kernel thread continues.....\n");
+
+  int ret = child -> exitstatus;
+  // TODO: we should free the resources, idk why the following causes page fault
+  // palloc_free_page(child);
+  return ret;
+
 }
 
 /* Free the current process's resources. */
@@ -119,6 +137,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  printf("process exiting....!\n");
+  sema_up(&cur->exit_semaphore);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -448,18 +469,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       upage += PGSIZE;
     }
   return true;
-}
-
-static void *
-push (uint8_t *kpage, size_t *ofs, const void *buf, size_t size)
-{
-  size_t padsize = ROUND_UP (size, sizeof (uint32_t));
-  if (*ofs < padsize)
-    return NULL;
-
-  *ofs -= padsize;
-  memcpy (kpage + *ofs + (padsize - size), buf, size);
-  return kpage + *ofs + (padsize - size);
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of

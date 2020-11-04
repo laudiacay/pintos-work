@@ -198,6 +198,14 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  // add this thread to kernel thread's children list
+  struct thread *kernel_t = thread_current();
+  t->parent = kernel_t->tid;
+  enum intr_level old_level = intr_disable ();
+  list_push_back (&kernel_t->children, &t->child_elem);
+  intr_set_level (old_level);
+
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -464,7 +472,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  list_init (t->children);
+  list_init (&t->children);
+  t->waitedfor = 0;
+  sema_init(&t->exit_semaphore, 0);
+  sema_init(&t->init_semaphore, 0);
+  
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);

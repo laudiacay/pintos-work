@@ -21,15 +21,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static void find_thread (struct thread *t, void * aux);
-static tid_t target_tid;
-static struct thread *target_thread;
 
-static void find_thread (struct thread *t, void * aux UNUSED)
-{
-  if (target_tid == t->tid)
-    target_thread = t;
-}
 
 char* space = " ";
 

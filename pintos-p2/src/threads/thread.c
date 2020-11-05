@@ -480,6 +480,8 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init(&t->load_semaphore, 0);
   t->loaded = 0;
   t->cur_child = NULL;
+  list_init (&t->file_list);
+  t->fd = 2;
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

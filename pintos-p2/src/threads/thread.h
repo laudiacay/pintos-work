@@ -103,6 +103,8 @@ struct thread
     struct semaphore init_semaphore;
     struct semaphore load_semaphore;
     int loaded; // 0 = not loaded, -1 = fail, 1 = loaded
+    int fd;
+    struct list file_list;
 
 
 

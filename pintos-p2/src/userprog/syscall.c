@@ -9,6 +9,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
+#include <stdlib.h>
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
@@ -19,9 +20,16 @@ static int sys_wait (uint8_t*);
 static pid_t sys_exec (uint8_t*);
 static bool sys_create (uint8_t*);
 static bool sys_remove (uint8_t*);
+static int sys_open (uint8_t*);
 
 struct lock file_lock;
 bool lock_initialized = false;
+
+struct file_in_thread {
+  struct file* fileptr;
+  int fd;
+  struct list_elem file_elem;
+};
 
 //static char * copy_in_string (const char *);
 void
@@ -57,6 +65,8 @@ syscall_handler (struct intr_frame *f)
   case SYS_CREATE: syscall = sys_create;
     break;
   case SYS_REMOVE: syscall = sys_remove;
+    break;
+  case SYS_OPEN: syscall = sys_open;
     break;
   default:
     syscall = NULL;
@@ -178,6 +188,27 @@ static int sys_exit(uint8_t* args_start) {
   thread_exit ();
 
   return status_code;
+}
+
+static int sys_open(uint8_t* args_start) {
+  if (*args_start == NULL) {
+    return -1;
+  }
+  char *file_name;
+  copy_in (&file_name, args_start, sizeof(char*));
+  lock_acquire(&file_lock);
+  struct file *file = filesys_open ((const char *)file_name);
+  if (file == NULL) {
+    lock_release(&file_lock);
+    return -1;
+  }
+  struct file_in_thread *new_file = malloc(sizeof(struct file_in_thread));
+  new_file->fd = thread_current()->fd;
+  new_file->fileptr = file;
+  thread_current()->fd++;
+  list_push_back(&thread_current()->file_list, &new_file->file_elem);
+  lock_release(&file_lock);
+  return new_file->fd;
 }
 
 

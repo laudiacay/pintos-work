@@ -23,10 +23,14 @@ static bool sys_remove (uint8_t*);
 static int sys_open (uint8_t*);
 static int sys_filesize (uint8_t*);
 static int sys_read (uint8_t* args_start);
+static void sys_seek (uint8_t* args_start);
+static unsigned sys_tell (uint8_t* args_start);
+static void sys_close (uint8_t* args_start);
 
 void check_buffer(const void *buffer, unsigned size);
 void check_ptr(const void *ptr);
 void check_str (const void* str);
+struct file_in_thread* get_file(int fd);
 
 struct lock file_lock;
 bool lock_initialized = false;
@@ -36,6 +40,26 @@ struct file_in_thread {
   int fd;
   struct list_elem file_elem;
 };
+
+struct file_in_thread*
+get_file(int fd) {
+  struct thread *cur = thread_current();
+  struct file_in_thread *target_file;
+  struct list_elem *e;
+  for (e = list_begin (&cur->file_list); e != list_end (&cur->file_list);
+       e = list_next (e))
+  {
+    target_file = list_entry (e, struct file_in_thread, file_elem);
+    if (target_file->fd == fd)
+      break;
+    else
+      target_file = NULL;
+  }
+  if (target_file == NULL)
+    return NULL;
+  else
+    return target_file;
+}
 
 void
 check_str (const void* str) {
@@ -105,6 +129,12 @@ syscall_handler (struct intr_frame *f)
     break;
   case SYS_READ: syscall = sys_read;
     break;
+  case SYS_SEEK: syscall = sys_seek;
+    break;
+  case SYS_TELL: syscall = sys_tell;
+    break;
+  case SYS_CLOSE: syscall = sys_close;
+    break;
   default:
     syscall = NULL;
     break;
@@ -123,10 +153,7 @@ static pid_t sys_exec (uint8_t* args_start) {
   
   char *cmd_line;
   copy_in (&cmd_line, args_start, sizeof(char*));
-
-  // TODO: check that cmdline is valid
-  // the bad pointer test passes in (char *) 0x20101234
-  // but idk how to check if its a string literal or some random stuff
+  check_str(cmd_line);
   
   pid_t process_id = process_execute((const char*)cmd_line);
   if (process_id == TID_ERROR)
@@ -204,23 +231,12 @@ static int sys_read (uint8_t* args_start) {
   }
   else {
     lock_acquire(&file_lock);
-    struct thread *cur = thread_current();
-    struct file_in_thread *target_file;
-    struct list_elem *e;
-    for (e = list_begin (&cur->file_list); e != list_end (&cur->file_list);
-         e = list_next (e))
-    {
-      target_file = list_entry (e, struct file_in_thread, file_elem);
-      if (target_file->fd == fd)
-        break;
-      else
-        target_file = NULL;
-    }
-    if (!target_file) {
+    struct file_in_thread* file = get_file(fd);
+    if (file == NULL) {
       lock_release(&file_lock);
       return -1;
-    }
-    retval = file_read(target_file->fileptr, buffer, size);
+    } 
+    retval = file_read(file->fileptr, buffer, size);
     lock_release(&file_lock);
   }
   return retval;
@@ -228,19 +244,18 @@ static int sys_read (uint8_t* args_start) {
 
 /* Write system call. */
 static int sys_write (uint8_t* args_start) {
-  struct file* fd;
+  int fd;
   const void* buffer;
   unsigned size;
-
   copy_in (&fd, args_start, sizeof(int));
   copy_in (&buffer, args_start + sizeof(int), sizeof(int));
   copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
-  
+  check_buffer(buffer, size);
+
   int size_to_write = size;
   int retval = 0;
-
   // if the handle is stdout, need to do chunks at a time until sizetowrite is zero
-  if ((int)fd == STDOUT_FILENO) {
+  if (fd == 1) {
     int write_amt;
     write_amt = size_to_write > 300 ? 300 : size_to_write;
     while (size_to_write > 0) {
@@ -248,9 +263,15 @@ static int sys_write (uint8_t* args_start) {
       retval += write_amt;
       size_to_write -= write_amt;
     }
-  } else {
+  }
+  else {
     lock_acquire(&file_lock);
-    retval = file_write(fd, buffer, size);
+    struct file_in_thread* file = get_file(fd);
+    if (file == NULL) {
+      lock_release(&file_lock);
+      return -1;
+    } 
+    retval = file_write(file->fileptr, buffer, size);
     lock_release(&file_lock);
   }
   return retval;
@@ -293,20 +314,57 @@ static int sys_filesize(uint8_t* args_start) {
   int fd;
   copy_in (&fd, args_start, sizeof(int));
   lock_acquire(&file_lock);
-  struct thread *cur = thread_current();
-  struct file_in_thread *target_file;
-  struct list_elem *e;
-  for (e = list_begin (&cur->file_list); e != list_end (&cur->file_list);
-       e = list_next (e))
-  {
-    target_file = list_entry (e, struct file_in_thread, file_elem);
-    if (target_file->fd == fd)
-      break;
-  }
-  int filesize = file_length(target_file->fileptr);
+  struct file_in_thread* file = get_file(fd);
+  int filesize = file_length(file->fileptr);
   lock_release(&file_lock);
   return filesize;
+}
 
+static void sys_seek (uint8_t* args_start) {
+  int fd;
+  unsigned position;
+  copy_in (&fd, args_start, sizeof(int));
+  copy_in (&position, args_start+sizeof(int), sizeof(int));
+
+  lock_acquire(&file_lock);
+  struct file_in_thread* file = get_file(fd);
+  if (file == NULL) {
+    lock_release(&file_lock);
+    return;
+  }
+  file_seek(file->fileptr, position);
+  lock_release(&file_lock);
+}
+
+static unsigned sys_tell (uint8_t* args_start) {
+  int fd;
+  copy_in (&fd, args_start, sizeof(int));
+
+  lock_acquire(&file_lock);
+  struct file_in_thread* file = get_file(fd);
+  if (file == NULL) {
+    lock_release(&file_lock);
+    return -1;
+  }
+  int pos = file_tell(file->fileptr);
+  lock_release(&file_lock);
+  return pos;
+}
+
+static void sys_close (uint8_t* args_start) {
+  int fd;
+  copy_in (&fd, args_start, sizeof(int));
+
+  lock_acquire(&file_lock);
+  struct file_in_thread* file = get_file(fd);
+  if (file == NULL) {
+    lock_release(&file_lock);
+    return;
+  }
+  file_close(file->fileptr);
+  list_remove(&file->file_elem);
+  free(file);
+  lock_release(&file_lock);
 }
 
 

@@ -21,6 +21,8 @@ static pid_t sys_exec (uint8_t*);
 static bool sys_create (uint8_t*);
 static bool sys_remove (uint8_t*);
 static int sys_open (uint8_t*);
+static int sys_filesize (uint8_t*);
+
 
 struct lock file_lock;
 bool lock_initialized = false;
@@ -67,6 +69,8 @@ syscall_handler (struct intr_frame *f)
   case SYS_REMOVE: syscall = sys_remove;
     break;
   case SYS_OPEN: syscall = sys_open;
+    break;
+  case SYS_FILESIZE: syscall = sys_filesize;
     break;
   default:
     syscall = NULL;
@@ -209,6 +213,26 @@ static int sys_open(uint8_t* args_start) {
   list_push_back(&thread_current()->file_list, &new_file->file_elem);
   lock_release(&file_lock);
   return new_file->fd;
+}
+
+static int sys_filesize(uint8_t* args_start) {
+  int fd;
+  copy_in (&fd, args_start, sizeof(int));
+  lock_acquire(&file_lock);
+  struct thread *cur = thread_current();
+  struct file_in_thread *target_file;
+  struct list_elem *e;
+  for (e = list_begin (&cur->file_list); e != list_end (&cur->file_list);
+       e = list_next (e))
+  {
+    target_file = list_entry (e, struct file_in_thread, file_elem);
+    if (target_file->fd == fd)
+      break;
+  }
+  int filesize = file_length(target_file->fileptr);
+  lock_release(&file_lock);
+  return filesize;
+
 }
 
 

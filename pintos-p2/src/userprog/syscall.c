@@ -6,11 +6,16 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "devices/shutdown.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
 static int sys_write (uint8_t*);
 static int sys_exit (uint8_t*);
+static void sys_halt (uint8_t*);
+static pid_t sys_exec (uint8_t*);
+
 //static char * copy_in_string (const char *);
 void
 syscall_init (void) 
@@ -22,15 +27,19 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
+
   unsigned call_nr;
   static int(*syscall)(uint8_t *);
-
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
 
   switch (call_nr) {
   case SYS_WRITE: syscall = sys_write;
     break;
   case SYS_EXIT: syscall = sys_exit;
+    break;
+  case SYS_HALT: syscall = sys_halt;
+    break;
+  case SYS_EXEC: syscall = sys_exec;
     break;
   default:
     syscall = NULL;
@@ -41,6 +50,44 @@ syscall_handler (struct intr_frame *f)
   else f->eax = -1;
 }
 
+static void sys_halt (uint8_t* args_start) {
+  shutdown_power_off();
+}
+
+
+static pid_t sys_exec (uint8_t* args_start) {
+  
+  char *cmd_line;
+  copy_in (&cmd_line, args_start, sizeof(char*));
+
+  // TODO: check that cmdline is valid
+  // the bad pointer test passes in (char *) 0x20101234
+  // but idk how to check if its a string literal or some random stuff
+  
+  pid_t process_id = process_execute((const char*)cmd_line);
+  if (process_id == TID_ERROR)
+    return -1;
+
+  // find this process in current thread's children list
+  struct thread* child = thread_current()->cur_child;
+  if (child == NULL)
+    return -1;
+
+  // wait for the child process to load
+  if (child->loaded == 0) {
+    sema_down(&child->load_semaphore);
+  }
+  if (child->loaded != 1) {   // failed to load
+    return -1;
+  }
+
+  return process_id;
+
+}
+
+// static int sys_wait (uint8_t* args_start) {
+
+// }
 
 /* Write system call. */
 static int sys_write (uint8_t* args_start) {

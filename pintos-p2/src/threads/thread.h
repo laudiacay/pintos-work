@@ -18,6 +18,7 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+typedef int pid_t;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -95,10 +96,13 @@ struct thread
     struct list_elem elem;              /* List element. */
     tid_t parent;
     struct list children;
+    struct thread *cur_child; // child most recently added
     struct list_elem child_elem;
     int waitedfor;
     struct semaphore exit_semaphore;
     struct semaphore init_semaphore;
+    struct semaphore load_semaphore;
+    int loaded; // 0 = not loaded, -1 = fail, 1 = loaded
 
 
 

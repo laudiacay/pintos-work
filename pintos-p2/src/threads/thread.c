@@ -201,6 +201,7 @@ thread_create (const char *name, int priority,
   // add this thread to kernel thread's children list
   struct thread *kernel_t = thread_current();
   t->parent = kernel_t->tid;
+  kernel_t->cur_child = t;
   enum intr_level old_level = intr_disable ();
   list_push_back (&kernel_t->children, &t->child_elem);
   intr_set_level (old_level);
@@ -476,6 +477,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->waitedfor = 0;
   sema_init(&t->exit_semaphore, 0);
   sema_init(&t->init_semaphore, 0);
+  sema_init(&t->load_semaphore, 0);
+  t->loaded = 0;
+  t->cur_child = NULL;
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

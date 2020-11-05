@@ -21,6 +21,15 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static void find_thread (struct thread *t, void * aux);
+static tid_t target_tid;
+static struct thread *target_thread;
+
+static void find_thread (struct thread *t, void * aux UNUSED)
+{
+  if (target_tid == t->tid)
+    target_thread = t;
+}
 
 char* space = " ";
 
@@ -44,10 +53,9 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR) 
     palloc_free_page (fn_copy); 
 
-  // TODO: the guide says locking is needed here??
 
   return tid;
 }
@@ -68,6 +76,17 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+
+  if (success) {
+    thread_current()->loaded = 1;
+  }
+  else {
+    thread_current()->loaded = -1;
+    thread_current()->exitstatus = -1;
+  }
+
+  sema_up(&thread_current()->load_semaphore);
+  
 
   /* If load failed, quit. */
   palloc_free_page (file_name);

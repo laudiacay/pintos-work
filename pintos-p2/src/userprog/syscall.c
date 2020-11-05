@@ -75,6 +75,10 @@ static pid_t sys_exec (uint8_t* args_start) {
 
   // wait for the child process to load
   if (child->loaded == 0) {
+    // !!!there is a bug here: after it gets waken up, the child
+    // is no longer the original thread. its thread id becomes 
+    // some garbage value. maybe we can't use sema down
+    // like this?
     sema_down(&child->load_semaphore);
   }
   if (child->loaded != 1) {   // failed to load

@@ -22,7 +22,11 @@ static bool sys_create (uint8_t*);
 static bool sys_remove (uint8_t*);
 static int sys_open (uint8_t*);
 static int sys_filesize (uint8_t*);
+static int sys_read (uint8_t* args_start);
 
+void check_buffer(const void *buffer, unsigned size);
+void check_ptr(const void *ptr);
+void check_str (const void* str);
 
 struct lock file_lock;
 bool lock_initialized = false;
@@ -32,6 +36,33 @@ struct file_in_thread {
   int fd;
   struct list_elem file_elem;
 };
+
+void
+check_str (const void* str) {
+  void *ptr = pagedir_get_page(thread_current()->pagedir, str);
+  if (ptr == NULL) {
+    thread_current()->exitstatus = -1;
+    thread_exit();
+  }
+}
+
+void
+check_ptr(const void *ptr) {
+  if (ptr == NULL || !is_user_vaddr(ptr)) {
+    thread_current()->exitstatus = -1;
+    thread_exit();
+  }
+}
+
+void
+check_buffer(const void *buffer, unsigned size) {
+  int i;
+  char *temp = (char*)buffer;
+  for (i=0; i<size; i++) {
+    check_ptr((const void*)temp);
+    temp++;
+  }
+}
 
 //static char * copy_in_string (const char *);
 void
@@ -71,6 +102,8 @@ syscall_handler (struct intr_frame *f)
   case SYS_OPEN: syscall = sys_open;
     break;
   case SYS_FILESIZE: syscall = sys_filesize;
+    break;
+  case SYS_READ: syscall = sys_read;
     break;
   default:
     syscall = NULL;
@@ -127,14 +160,14 @@ static pid_t sys_exec (uint8_t* args_start) {
 // }
 
 static bool sys_create (uint8_t* args_start) {
-  if (*args_start == NULL) {
-    thread_current()->exitstatus = -1;
-    thread_exit();
-  }
   char *file_name;
   unsigned size;
   copy_in (&file_name, args_start, sizeof(char*));
   copy_in (&size, args_start + sizeof(char*), sizeof(int));
+
+  check_ptr(file_name);
+  check_str(file_name);
+
   lock_acquire(&file_lock);
   bool status = filesys_create(file_name, size);
   lock_release(&file_lock);
@@ -142,16 +175,55 @@ static bool sys_create (uint8_t* args_start) {
 }
 
 static bool sys_remove (uint8_t* args_start) {
-  if (*args_start == NULL) {
-    thread_current()->exitstatus = -1;
-    thread_exit();
-  }
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
+  check_ptr(file_name);
+  check_str(file_name);
   lock_acquire(&file_lock);
   bool status = filesys_remove(file_name);
   lock_release(&file_lock);
   return status;
+}
+
+static int sys_read (uint8_t* args_start) {
+  int fd;
+  const void* buffer;
+  unsigned size;
+  copy_in (&fd, args_start, sizeof(int));
+  copy_in (&buffer, args_start + sizeof(int), sizeof(int));
+  copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
+  check_buffer(buffer, size);
+  int retval = 0;
+  if (fd == 0) {
+    int i;
+    uint8_t *store = (uint8_t *)buffer;
+    for (i = 0;i < size; i++) {
+      store[i] = input_getc();
+    }
+    return size;
+  }
+  else {
+    lock_acquire(&file_lock);
+    struct thread *cur = thread_current();
+    struct file_in_thread *target_file;
+    struct list_elem *e;
+    for (e = list_begin (&cur->file_list); e != list_end (&cur->file_list);
+         e = list_next (e))
+    {
+      target_file = list_entry (e, struct file_in_thread, file_elem);
+      if (target_file->fd == fd)
+        break;
+      else
+        target_file = NULL;
+    }
+    if (!target_file) {
+      lock_release(&file_lock);
+      return -1;
+    }
+    retval = file_read(target_file->fileptr, buffer, size);
+    lock_release(&file_lock);
+  }
+  return retval;
 }
 
 /* Write system call. */
@@ -177,8 +249,9 @@ static int sys_write (uint8_t* args_start) {
       size_to_write -= write_amt;
     }
   } else {
-    // TODO: lock the fs????
+    lock_acquire(&file_lock);
     retval = file_write(fd, buffer, size);
+    lock_release(&file_lock);
   }
   return retval;
 }
@@ -195,11 +268,12 @@ static int sys_exit(uint8_t* args_start) {
 }
 
 static int sys_open(uint8_t* args_start) {
-  if (*args_start == NULL) {
-    return -1;
-  }
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
+
+  check_ptr(file_name);
+  check_str(file_name);
+
   lock_acquire(&file_lock);
   struct file *file = filesys_open ((const char *)file_name);
   if (file == NULL) {

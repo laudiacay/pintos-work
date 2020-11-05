@@ -8,13 +8,20 @@
 #include "threads/thread.h"
 #include "devices/shutdown.h"
 #include "userprog/process.h"
+#include "threads/synch.h"
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
 static int sys_write (uint8_t*);
 static int sys_exit (uint8_t*);
 static void sys_halt (uint8_t*);
+static int sys_wait (uint8_t*);
 static pid_t sys_exec (uint8_t*);
+static bool sys_create (uint8_t*);
+static bool sys_remove (uint8_t*);
+
+struct lock file_lock;
+bool lock_initialized = false;
 
 //static char * copy_in_string (const char *);
 void
@@ -27,6 +34,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
+  if (!lock_initialized) {
+    lock_init(&file_lock);
+    lock_initialized = true;
+  }
 
   unsigned call_nr;
   static int(*syscall)(uint8_t *);
@@ -39,7 +50,13 @@ syscall_handler (struct intr_frame *f)
     break;
   case SYS_HALT: syscall = sys_halt;
     break;
+  // case SYS_WAIT: syscall = sys_wait;
+  //   break;
   case SYS_EXEC: syscall = sys_exec;
+    break;
+  case SYS_CREATE: syscall = sys_create;
+    break;
+  case SYS_REMOVE: syscall = sys_remove;
     break;
   default:
     syscall = NULL;
@@ -90,8 +107,38 @@ static pid_t sys_exec (uint8_t* args_start) {
 }
 
 // static int sys_wait (uint8_t* args_start) {
-
+//   tid_t child_id;
+//   copy_in (&child_id, args_start, sizeof(int));
+//   return process_wait(child_id);
 // }
+
+static bool sys_create (uint8_t* args_start) {
+  if (*args_start == NULL) {
+    thread_current()->exitstatus = -1;
+    thread_exit();
+  }
+  char *file_name;
+  unsigned size;
+  copy_in (&file_name, args_start, sizeof(char*));
+  copy_in (&size, args_start + sizeof(char*), sizeof(int));
+  lock_acquire(&file_lock);
+  bool status = filesys_create(file_name, size);
+  lock_release(&file_lock);
+  return status;
+}
+
+static bool sys_remove (uint8_t* args_start) {
+  if (*args_start == NULL) {
+    thread_current()->exitstatus = -1;
+    thread_exit();
+  }
+  char *file_name;
+  copy_in (&file_name, args_start, sizeof(char*));
+  lock_acquire(&file_lock);
+  bool status = filesys_remove(file_name);
+  lock_release(&file_lock);
+  return status;
+}
 
 /* Write system call. */
 static int sys_write (uint8_t* args_start) {

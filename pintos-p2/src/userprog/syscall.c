@@ -72,7 +72,7 @@ check_str (const void* str) {
 
 void
 check_ptr(const void *ptr) {
-  if (ptr == NULL || !is_user_vaddr(ptr)) {
+  if (ptr == NULL || !is_user_vaddr(ptr) || !pagedir_get_page(thread_current()->pagedir, ptr) ) {
     thread_current()->exitstatus = -1;
     thread_exit();
   }
@@ -99,7 +99,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
-  //printf("in syscall_handler, esp = %p\n", f->esp);
+  // printf("in syscall_handler, esp = %p\n", f->esp);
   if (!lock_initialized) {
     lock_init(&file_lock);
     lock_initialized = true;
@@ -414,9 +414,12 @@ static void copy_in (void *dst_, const void *usrc_, size_t size) {
   //printf("user ptr out of bounds? %d\n", usrc_ >= ( (uint8_t *) PHYS_BASE));
   struct thread* t = thread_current();
   for (; size > 0; size--, dst++, usrc++)
-    if (!is_user_vaddr(usrc) || !pagedir_get_page(t->pagedir, usrc_) || !get_user (dst, usrc)) {
-      t->exitstatus = -1;
-      thread_exit ();
+    {
+      check_ptr(usrc_);
+      if (!get_user (dst, usrc)) {
+        t->exitstatus = -1;
+        thread_exit ();
+    }
 
     }
 }

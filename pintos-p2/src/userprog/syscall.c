@@ -99,15 +99,16 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
+  //printf("in syscall_handler, esp = %p\n", f->esp);
   if (!lock_initialized) {
     lock_init(&file_lock);
     lock_initialized = true;
   }
 
-  unsigned call_nr;
+  unsigned call_nr = 0;
   static int(*syscall)(uint8_t *);
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
-
+  //printf("made it?\n");
   switch (call_nr) {
   case SYS_WRITE: syscall = sys_write;
     break;
@@ -139,8 +140,10 @@ syscall_handler (struct intr_frame *f)
     syscall = NULL;
     break;
   }
-  if (syscall != NULL)
+  if (syscall != NULL){
+    //printf("about to do syscall\n");
     f->eax = syscall(f->esp + sizeof (call_nr));
+  }
   else f->eax = -1;
 }
 
@@ -383,6 +386,7 @@ get_user (uint8_t *dst, const uint8_t *usrc)
   asm ("movl $1f, %%eax; movb %2, %%al; movb %%al, %0; 1:"
        : "=m" (*dst), "=&a" (eax) : "m" (*usrc));
   return eax != 0;
+
 }
 
 
@@ -404,13 +408,17 @@ put_user (uint8_t *udst, uint8_t byte)
    thread_exit() if any of the user accesses are invalid. */ 
 
 static void copy_in (void *dst_, const void *usrc_, size_t size) { 
-
+  //printf("copying %d bytes to %p kernel from %p user\n", size, dst_, usrc_);
   uint8_t *dst = dst_; 
   const uint8_t *usrc = usrc_;
-  
+  //printf("user ptr out of bounds? %d\n", usrc_ >= ( (uint8_t *) PHYS_BASE));
+  struct thread* t = thread_current();
   for (; size > 0; size--, dst++, usrc++)
-    if (usrc >= (uint8_t *) PHYS_BASE || !get_user (dst, usrc))
+    if (!is_user_vaddr(usrc) || !pagedir_get_page(t->pagedir, usrc_) || !get_user (dst, usrc)) {
+      t->exitstatus = -1;
       thread_exit ();
+
+    }
 }
 
 

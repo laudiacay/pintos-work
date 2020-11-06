@@ -55,10 +55,7 @@ get_file(int fd) {
     else
       target_file = NULL;
   }
-  if (target_file == NULL)
-    return NULL;
-  else
-    return target_file;
+  return target_file;
 }
 
 void

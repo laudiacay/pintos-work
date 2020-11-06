@@ -207,6 +207,7 @@ thread_create (const char *name, int priority,
   childwp->exit_flag = t->exit_flag;
   childwp->exitstatus = t->exitstatus;
   childwp->waitedfor = t->waitedfor;
+  childwp->loaded = t->loaded;
   kernel_t->cur_child = childwp;
   t->wrapper = childwp;
   enum intr_level old_level = intr_disable ();

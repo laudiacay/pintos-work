@@ -126,6 +126,7 @@ struct child_wrapper {
   int exit_flag;
   int exitstatus;
   int waitedfor;
+  int loaded;
   struct list_elem child_elem;
 };
 

@@ -32,7 +32,6 @@ void check_ptr(const void *ptr);
 void check_str (const void* str);
 struct file_in_thread* get_file(int fd);
 
-struct lock file_lock;
 bool lock_initialized = false;
 
 struct file_in_thread {
@@ -165,15 +164,12 @@ static pid_t sys_exec (uint8_t* args_start) {
     return -1;
 
   // wait for the child process to load
-  if (child->realchild->loaded == 0) {
-    // !!!there is a bug here: after it gets waken up, the child
-    // is no longer the original thread. its thread id becomes 
-    // some garbage value. maybe we can't use sema down
-    // like this?
+  if (child->loaded == 0) {
     sema_down(&child->realchild->load_semaphore);
   }
-  if (child->realchild->loaded != 1) {   // failed to load
-    child->exit_flag = 1;
+  if (child->loaded == -1) {   // failed to load
+    // child->exit_flag = 1;
+    return -1;
   }
 
   return process_id;

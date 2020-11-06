@@ -70,11 +70,11 @@ start_process (void *file_name_)
 
 
   if (success) {
-    thread_current()->loaded = 1;
+    thread_current()->wrapper->loaded = 1;
   }
   else {
-    thread_current()->loaded = -1;
-    // thread_current()->exitstatus = -1;
+    printf("failed to load\n");
+    thread_current()->wrapper->loaded = -1;
   }
 
   sema_up(&thread_current()->load_semaphore);
@@ -82,8 +82,10 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success) {
+    printf("%s: exiting\n", thread_current()->name);
     thread_exit ();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -108,14 +110,12 @@ int
 process_wait (tid_t child_tid) 
 {
   struct thread *cur = thread_current();
-
   struct child_wrapper* child;
   struct list_elem *e;
 
   for (e = list_begin (&cur->children); e != list_end (&cur->children);
        e = list_next (e))
   {
-
     child = list_entry (e, struct child_wrapper, child_elem);
     if (child -> tid == child_tid)
       break;
@@ -150,11 +150,15 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  sema_up(&cur->exit_semaphore);
+  lock_acquire(&file_lock);
   if (cur->exe_file) {
     file_allow_write(cur->exe_file);
     file_close (cur->exe_file);
   }
+  lock_release(&file_lock);
+
+  cur->wrapper->exit_flag = 1;
+  sema_up(&cur->exit_semaphore);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

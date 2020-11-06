@@ -2,7 +2,9 @@
 #define FILESYS_FILE_H
 
 #include "filesys/off_t.h"
+#include "threads/synch.h"
 
+struct lock file_lock;
 struct inode;
 
 /* Opening and closing files. */

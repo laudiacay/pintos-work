@@ -201,9 +201,16 @@ thread_create (const char *name, int priority,
   // add this thread to kernel thread's children list
   struct thread *kernel_t = thread_current();
   t->parent = kernel_t->tid;
-  kernel_t->cur_child = t;
+  struct child_wrapper *childwp = malloc(sizeof(struct child_wrapper));
+  childwp->realchild = t;
+  childwp->tid = tid;
+  childwp->exit_flag = t->exit_flag;
+  childwp->exitstatus = t->exitstatus;
+  childwp->waitedfor = t->waitedfor;
+  kernel_t->cur_child = childwp;
+  t->wrapper = childwp;
   enum intr_level old_level = intr_disable ();
-  list_push_back (&kernel_t->children, &t->child_elem);
+  list_push_back (&kernel_t->children, &childwp->child_elem);
   intr_set_level (old_level);
 
 
@@ -482,6 +489,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->cur_child = NULL;
   list_init (&t->file_list);
   t->fd = 2;
+  t->exit_flag = 0;
+  t->wrapper = NULL;
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

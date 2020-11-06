@@ -74,7 +74,7 @@ start_process (void *file_name_)
   }
   else {
     thread_current()->loaded = -1;
-    thread_current()->exitstatus = -1;
+    // thread_current()->exitstatus = -1;
   }
 
   sema_up(&thread_current()->load_semaphore);
@@ -109,14 +109,14 @@ process_wait (tid_t child_tid)
 {
   struct thread *cur = thread_current();
 
-  struct thread* child;
+  struct child_wrapper* child;
   struct list_elem *e;
 
   for (e = list_begin (&cur->children); e != list_end (&cur->children);
        e = list_next (e))
   {
 
-    child = list_entry (e, struct thread, child_elem);
+    child = list_entry (e, struct child_wrapper, child_elem);
     if (child -> tid == child_tid)
       break;
     else
@@ -130,7 +130,11 @@ process_wait (tid_t child_tid)
 
   // TODO:return -1 if killed by kernel?
 
-  sema_down(&child->exit_semaphore);
+  if (child->exit_flag == 1) {
+    return child->exitstatus;
+  }
+
+  sema_down(&child->realchild->exit_semaphore);
 
   int ret = child -> exitstatus;
   // TODO: we should free the resources, idk why the following causes page fault

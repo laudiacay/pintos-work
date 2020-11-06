@@ -115,8 +115,8 @@ syscall_handler (struct intr_frame *f)
     break;
   case SYS_HALT: syscall = sys_halt;
     break;
-  // case SYS_WAIT: syscall = sys_wait;
-  //   break;
+  case SYS_WAIT: syscall = sys_wait;
+    break;
   case SYS_EXEC: syscall = sys_exec;
     break;
   case SYS_CREATE: syscall = sys_create;
@@ -160,31 +160,31 @@ static pid_t sys_exec (uint8_t* args_start) {
     return -1;
 
   // find this process in current thread's children list
-  struct thread* child = thread_current()->cur_child;
+  struct child_wrapper* child = thread_current()->cur_child;
   if (child == NULL)
     return -1;
 
   // wait for the child process to load
-  if (child->loaded == 0) {
+  if (child->realchild->loaded == 0) {
     // !!!there is a bug here: after it gets waken up, the child
     // is no longer the original thread. its thread id becomes 
     // some garbage value. maybe we can't use sema down
     // like this?
-    sema_down(&child->load_semaphore);
+    sema_down(&child->realchild->load_semaphore);
   }
-  if (child->loaded != 1) {   // failed to load
-    return -1;
+  if (child->realchild->loaded != 1) {   // failed to load
+    child->exit_flag = 1;
   }
 
   return process_id;
 
 }
 
-// static int sys_wait (uint8_t* args_start) {
-//   tid_t child_id;
-//   copy_in (&child_id, args_start, sizeof(int));
-//   return process_wait(child_id);
-// }
+static int sys_wait (uint8_t* args_start) {
+  tid_t child_id;
+  copy_in (&child_id, args_start, sizeof(int));
+  return process_wait(child_id);
+}
 
 static bool sys_create (uint8_t* args_start) {
   char *file_name;
@@ -213,6 +213,8 @@ static bool sys_remove (uint8_t* args_start) {
 }
 
 static int sys_read (uint8_t* args_start) {
+  // if (args_start == NULL)
+  //   return -1;
   int fd;
   const void* buffer;
   unsigned size;
@@ -283,6 +285,7 @@ static int sys_exit(uint8_t* args_start) {
   copy_in (&status_code, args_start, sizeof(int));
   struct thread *cur = thread_current ();
   cur->exitstatus = status_code;
+  cur->wrapper->exitstatus = status_code;
   thread_exit ();
 
   return status_code;

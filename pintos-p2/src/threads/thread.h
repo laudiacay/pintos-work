@@ -96,8 +96,8 @@ struct thread
     struct list_elem elem;              /* List element. */
     tid_t parent;
     struct list children;
-    struct thread *cur_child; // child most recently added
-    struct list_elem child_elem;
+    struct child_wrapper *cur_child; // child most recently added
+    struct child_wrapper *wrapper;
     int waitedfor;
     struct semaphore exit_semaphore;
     struct semaphore init_semaphore;
@@ -105,6 +105,7 @@ struct thread
     int loaded; // 0 = not loaded, -1 = fail, 1 = loaded
     int fd;
     struct list file_list;
+    int exit_flag;
 
 
 
@@ -117,6 +118,15 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
   };
+
+struct child_wrapper {
+  struct thread* realchild;
+  int tid;
+  int exit_flag;
+  int exitstatus;
+  int waitedfor;
+  struct list_elem child_elem;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

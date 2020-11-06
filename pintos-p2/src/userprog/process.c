@@ -151,7 +151,10 @@ process_exit (void)
   uint32_t *pd;
 
   sema_up(&cur->exit_semaphore);
-
+  if (cur->exe_file) {
+    file_allow_write(cur->exe_file);
+    file_close (cur->exe_file);
+  }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -285,12 +288,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_name_copy, file_name, 60);
   char* save_ptr;
   char* file_name_real = strtok_r ( file_name_copy, " ", &save_ptr);
-  file = filesys_open (file_name_real);
+  t->exe_file = file = filesys_open (file_name_real);
+
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
+      //jankjankjankjankjank
+      //t->exitstatus = -1;
       goto done; 
     }
+  file_deny_write (file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -374,7 +381,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 

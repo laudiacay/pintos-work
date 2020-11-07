@@ -492,6 +492,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->fd = 2;
   t->exit_flag = 0;
   t->wrapper = NULL;
+  t->exitstatus = -1;
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

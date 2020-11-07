@@ -161,8 +161,7 @@ otherwise the thread would exit.
 
 4096 and 2 is the answer. There's a lot of room for improvement.
 We could/should have just memoized the result for when chunks of a
-read/write are all in the same page. I will try to implement this before the deadline
-if i can figure out what's going on with our last two failing tests.
+read/write are all in the same page.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.

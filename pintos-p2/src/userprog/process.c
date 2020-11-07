@@ -73,7 +73,6 @@ start_process (void *file_name_)
     thread_current()->wrapper->loaded = 1;
   }
   else {
-    printf("failed to load\n");
     thread_current()->wrapper->loaded = -1;
   }
 
@@ -83,7 +82,6 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) {
-    printf("%s: exiting\n", thread_current()->name);
     thread_exit ();
   }
 

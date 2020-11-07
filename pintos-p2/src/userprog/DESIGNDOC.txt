@@ -74,8 +74,10 @@ incorrect.
 >> separation.  Identify at least two advantages of the Unix approach.
 
 1. Kernel's job will be simpler- it doesn't have to do the parsing and can
-avoid potential bugs that cause security problems.
-2. ???
+avoid potential bugs that cause security problems. Can also go faster.
+2. Shell can take over some work that can be done in userspace (like cd, ls, etc)
+Shell builtins are really powerful and allow a lot of stuff to be abstracted
+further into userspace.
 
 
 			     SYSTEM CALLS
@@ -157,7 +159,10 @@ otherwise the thread would exit.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
-???
+4096 and 2 is the answer. There's a lot of room for improvement.
+We could/should have just memoized the result for when chunks of a
+read/write are all in the same page. I will try to implement this before the deadline
+if i can figure out what's going on with our last two failing tests.
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.

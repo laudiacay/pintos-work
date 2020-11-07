@@ -1,0 +1,278 @@
+		     +--------------------------+
+       	       	     |		CS 140		|
+		     | PROJECT 2: USER PROGRAMS	|
+		     | 	   DESIGN DOCUMENT     	|
+		     +--------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Claudia Richoux laudecay@uchicago.edu
+Kate Hu katehu@uchicago.edu
+Kate 50%, Claudia 50%
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+We didn't declare anything new for argument passing.
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do
+>> you arrange for the elements of argv[] to be in the right order?
+>> How do you avoid overflowing the stack page?
+
+We first tokenize the command line by space, and memcpy each token to
+the stack pointer (after copying each token we decrease the stack pointer
+by size of token.) Then we decrease the pointer by amount that ensures
+word alignment and fill the space with 0. The amount is calculated by
+(int)(*esp) % sizeof(char*). Then we push argv[argc] by decreasing the
+stack pointer by size of (char*) and fill the space with 0.
+Before we push the word alignment, we store the address of argv[0] in
+argv_tracker. Now we start pushing the address of argv[i] not in a 
+reverse order. We first decrease the stack pointer by argc * sizeof(void*)
+so that we can start pushing the address of argv[0] first. Since we
+already save its address in argv_tracker, we can just do a memcpy from
+argv_tracker to the stack pointer. And after pushing each argv[i] we
+increase the pointer by sizeof(char*) and argv_tracker by size of its
+value, and then memcpy the next argv[i], and so on until we finish
+pushing all the argv[i]. After we are done they are already in the
+correct order. Finally we push arg count and a fake return address.
+To avoid overflowing the stack page, we set the maximum arg count to
+be PGSIZE/sizeof(char*). When we are tokenizing the commandline and
+keeping track of the actual arg count, if it exceeds this value we
+immediately return false.
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+Because strtok() may cause race condition. In strtok() the last token
+is kept within the function for use in the next call to strtok(), so
+if one thread calls this function and gets swapped out, the next thread
+may use the token held by the thread that gets swapped out, which is
+incorrect.
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+1. Kernel's job will be simpler- it doesn't have to do the parsing and can
+avoid potential bugs that cause security problems.
+2. ???
+
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+struct thread {
+	tid_t parent; // identifies the parent of this thread
+	struct list children; // tracks the list of children thread
+	struct child_wrapper *cur_child; // tracks the wrapper of the
+	                                 // most recently added child
+	struct child_wrapper *wrapper; // a wrapper of this thread 
+								// that stores some of its status
+	int waitedfor; // tracks whether this thread has been waited
+					// for by its parent
+	struct semaphore exit_semaphore; // a semaphore this thread's
+								// parent can call down on when 
+								// the parent needs to wait for
+								// this child thread to exit
+	struct semaphore load_semaphore; // a semaphore this thread's
+								// parent can call down on when
+								// the parent needs to wait for
+								// this child thread to load
+	int loaded; // tracks whether this thread has been
+				// successfully loaded
+	int fd; // current value of the file descriptor
+	struct list file_list; // tracks the list of files opened
+							// by this thread
+	int exit_flag; // tracks whether this thread has exited
+}
+
+// purpose of the struct is to store some status of a child
+// thread, so that when a child thread gets destroyed, its
+// parent can still access some of its status to make decisions
+struct child_wrapper {
+  struct thread* realchild; // pointer to the child thread that
+  							// has this wrapper
+  int tid; // thread id of the child thread
+  int exit_flag; // exit flag of the child thread
+  int exitstatus; // exitstatus of the child thread
+  int waitedfor; // waitedfor status of the child thread
+  int loaded; // loaded status of the child thread
+  struct list_elem child_elem; // list elem that goes into the
+  							// list of children held by the parent
+};
+
+struct lock file_lock; // lock the file system when a thread is
+						// accessing file system code
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+It's unique within a single process. Each process has its own fd
+counter. When a thread opens a file, its current counter value would be
+that file's descriptor, and the counter would also be incremented
+by one. 
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+We first copy in the syscall number from the stack pointer to see
+which syscall to run. Then in both sys_write and sys_read we first
+copy in the three arguments: fd, buffer, size, and then check whether
+the buffer is valid. If it is then we proceed with the syscall,
+otherwise the thread would exit.
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+???
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+The wait system call calls process_wait function and returns its
+return value. The process wait function first tries to find the 
+child in the children list that has the given child id. If such child
+ is found, or the child has been waited for, the function returns -1.
+ Otherwise, if the child has already exited, which can be known through
+ its exit flag, the function returns the child's exit status. If the
+ child hasn't exited yet, call sema down on the exit semaphore and wait
+ for the child to exit. After it gets signaled that the child has exited,
+ it would return the child's exit status.
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+There are three functions written to deal with checking bad pointers,
+checking bad strings, and checking bad buffer. We modulize these error
+checking functions so we don't have to write lengthy code in every system
+call. Before we dereference any pointer or execute any commandline, we
+just need to call check pointer and check string functions. For write
+and read system call, we call the check buffer function- since we already
+know the size to read or write, this function would check every byte of
+the buffer up to the size, before we proceed to read or write. In those
+three error handling functions, if at any point it fails, it would call
+thread exit immediately, and thread exit would call process exit, where
+we free all the temporarily allocated resources. 
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+In exec system call, if the load flag of the child process is 0, which
+means that the child process hasn't been loaded yet, we call sema down
+on the load semaphore to put this current thread to sleep and wait
+until the child process calls sema up in the start process function
+signalling the parent that it has already been loaded. Then the parent
+thread would proceed. If the child is successfully loaded, its load
+flag would be set to 1, otherwise -1. And the parent can access this
+flag in the exec system call to check the load success/failure status.
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+If P calls wait before C exists, it would call sema down in process
+ wait and sleep until C exists and signals it. If P calls wait
+ after C exists, it would know from C's exit flag that it has already
+ exited, so P would directly return C's exit status. All resources
+ are freed in process exit, so no matter when C exits, its resources
+ would be freed as long as it goes through process exit (which it must.)
+ If P terminates without waiting, in process exit a thread always
+ removes all of its child processes and frees their resources, so P
+ would remove all of its children regardless of when C exits.
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+The error handling functions are modularized which are simple to use
+and we can avoid writing lenthy code in each syscall.
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+We didn't use a global fd counter and instead use independent fd counter
+for each process in order to avoid race condition. If we have a global
+counter, when two threads both want to open a file and need to access
+and increment the global counter, some synchronization is needed.
+Our design doesn't need to have this synchronization.
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
+We used the identity mapping.
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?

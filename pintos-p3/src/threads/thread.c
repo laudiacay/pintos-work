@@ -493,6 +493,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->exit_flag = 0;
   t->wrapper = NULL;
   t->exitstatus = -1;
+
+  hash_init (&t->supp_pt, page_hash, page_less, NULL);
   
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

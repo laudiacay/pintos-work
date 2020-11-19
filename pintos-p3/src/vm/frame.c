@@ -54,8 +54,18 @@ try_frame_alloc_and_lock (struct page *page)
 /* Tries really hard to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
 static struct frame *
-frame_alloc_and_lock (struct page *page) {
-
+frame_alloc_and_lock (struct page *page)
+{
+  for (int i = 0; i < frame_cnt; i++) {
+    struct frame *f = &frames[i];
+    if (f->page == NULL) {
+      f->page = page;
+      lock_acquire(&f->lock);
+      return f;
+    }
+  }
+  PANIC ("no free frames");
+  return NULL;
 
 }
 

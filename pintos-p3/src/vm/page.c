@@ -64,6 +64,19 @@ page_accessed_recently (struct page *p)
 struct page *
 page_allocate (void *vaddr, bool read_only)
 {
+   struct page *p = malloc(sizeof(struct page));
+   if (!p)
+      return NULL;
+   p->uaddr = vaddr;
+
+   struct hash *s_pt = &thread_current()->supp_pt;
+   struct hash_elem *e = hash_insert (s_pt, &p->hash_elem);
+   if (e != NULL) {
+     return NULL;
+   }
+   
+
+   return p;
 
 }
 
@@ -79,14 +92,17 @@ page_deallocate (void *vaddr)
 unsigned
 page_hash (const struct hash_elem *e, void *aux)
 {
-
+   const struct page *p = hash_entry (e, struct page, hash_elem);
+   return hash_bytes (&p->uaddr, sizeof p->uaddr);
 }
 
 /* Returns true if page A precedes page B. */
 bool
 page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux)
 {
-
+   const struct page *a = hash_entry (a_, struct page, hash_elem);
+   const struct page *b = hash_entry (b_, struct page, hash_elem);
+   return a->uaddr < b->uaddr;
 }
 
 /* Tries to lock the page containing ADDR into physical memory.

@@ -1,11 +1,19 @@
 #define STACK_MAX (1024 * 1024)
 
 #include "lib/kernel/hash.h"
+#include "filesys/directory.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "threads/thread.h"
+
 
 struct page {
-	int i;
+	void *uaddr;
+	struct file *file;
+	off_t file_offset;
+	size_t file_bytes;
+	struct hash_elem *hash_elem;
 };
-
 
 static void destroy_page (struct hash_elem *p_, void *aux);
 void page_exit (void);

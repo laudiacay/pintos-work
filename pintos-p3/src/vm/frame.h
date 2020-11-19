@@ -1,9 +1,10 @@
 #include "threads/synch.h"
-#include "page.h"
+#include "threads/thread.h"
 
 struct frame {
 	struct page* page;
 	struct lock lock;
+	struct thread* owner;
 	void *base;
 };
 

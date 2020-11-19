@@ -1,4 +1,8 @@
-#include <frame.h>
+#include "frame.h"
+#include "threads/palloc.h"
+#include "threads/loader.h"
+#include <debug.h>
+
 /*
 Managing the frame table
 
@@ -43,7 +47,7 @@ frame_init (void)
 static struct frame *
 try_frame_alloc_and_lock (struct page *page)
 {
-  
+
 
 }
 

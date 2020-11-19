@@ -1,5 +1,5 @@
-#include <synch.h>
-#include <page.h>
+#include "threads/synch.h"
+#include "page.h"
 
 struct frame {
 	struct page* page;

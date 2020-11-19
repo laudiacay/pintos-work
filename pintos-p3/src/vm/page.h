@@ -1,6 +1,6 @@
 #define STACK_MAX (1024 * 1024)
 
-#include <hash.h>
+#include "lib/kernel/hash.h"
 
 struct page {
 	int i;

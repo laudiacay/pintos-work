@@ -23,6 +23,8 @@ kernel.
 
 */
 
+
+
 void
 frame_init (void)
 {
@@ -61,7 +63,6 @@ frame_alloc_and_lock (struct page *page)
     struct frame *f = &frames[i];
     if (f->page == NULL) {
       f->page = page;
-      lock_acquire(&f->lock);
       return f;
     }
   }
@@ -74,7 +75,7 @@ frame_alloc_and_lock (struct page *page)
    Upon return, p->frame will not change until P is unlocked. */
 void
 frame_lock (struct page *p) {
-
+  
 
 }
 
@@ -83,14 +84,14 @@ frame_lock (struct page *p) {
    Any data in F is lost. */
 void
 frame_free (struct frame *f) {
-
-
+  frame_unlock(f);
+  f->page = NULL;
 }
 
 /* Unlocks frame F, allowing it to be evicted.
    F must be locked for use by the current process. */
 void
 frame_unlock (struct frame *f) {
-
-
+  ASSERT((f->lock).holder == thread_current());
+  lock_release(&f->lock);
 }

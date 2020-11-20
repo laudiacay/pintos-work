@@ -3,11 +3,11 @@
 
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
-/*static void
+static void
 destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
 
-}*/
+}
 
 /* Destroys the current process's page table. */
 void
@@ -22,7 +22,14 @@ page_exit (void)
 static struct page *
 page_for_addr (const void *address )
 {
-  return NULL;
+  struct thread* t = thread_current();
+  ASSERT(t->supp_pt_initialized);
+  struct page ht_page;
+  ht_page.uaddr = pg_round_down(address);
+  struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
+  if (found_page_elem) return hash_entry(found_page_elem, struct page, hash_elem);
+
+  return page_allocate(address, false);
 }
 
 /* Locks a frame for page P and pages it in.

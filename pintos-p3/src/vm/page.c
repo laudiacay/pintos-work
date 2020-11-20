@@ -1,12 +1,13 @@
 #include "page.h"
+#include "threads/malloc.h"
 
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
-static void
+/*static void
 destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
 
-}
+}*/
 
 /* Destroys the current process's page table. */
 void

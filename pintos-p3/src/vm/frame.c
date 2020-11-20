@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/loader.h"
 #include <debug.h>

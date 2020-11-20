@@ -19,10 +19,10 @@ struct page {
 	struct hash_elem hash_elem;
 };
 
-static void destroy_page (struct hash_elem *p_, void *aux);
+//static void destroy_page (struct hash_elem *p_, void *aux);
 void page_exit (void);
-static struct page *page_for_addr (const void *address);
-static bool do_page_in (struct page *p);
+//static struct page *page_for_addr (const void *address);
+//static bool do_page_in (struct page *p);
 bool page_in (void *fault_addr);
 bool page_out (struct page *p);
 bool page_accessed_recently (struct page *p);

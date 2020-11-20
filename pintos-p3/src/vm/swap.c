@@ -1,4 +1,5 @@
 #include "swap.h"
+#include <stdio.h>
 
 /*
 
@@ -38,7 +39,7 @@ swap_init (void)
 }
 
 /* Swaps in page P, which must have a locked frame
-   (and be swapped out). */
+   (and be swapped out). 
 bool
 swap_in (struct page *p)
 {
@@ -48,7 +49,7 @@ swap_in (struct page *p)
     // - bitmap_reset()
 }
 
-/* Swaps out page P, which must have a locked frame. */
+/* Swaps out page P, which must have a locked frame. 
 bool 
 swap_out (struct page *p) 
 {
@@ -59,4 +60,4 @@ swap_out (struct page *p)
   // - block_write()
     
   
-}
+  }*/

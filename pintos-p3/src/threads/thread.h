@@ -111,7 +111,7 @@ struct thread
     
     // for vm
     struct hash supp_pt;   // supplemental page table
-
+    bool supp_pt_initialized; // has it been initialized? can't at thread_init time.
 
 
 #ifdef USERPROG

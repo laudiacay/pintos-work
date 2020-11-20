@@ -279,7 +279,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-
+  if (!t->supp_pt_initialized) {
+    hash_init (&t->supp_pt, page_hash, page_less, NULL);
+    t->supp_pt_initialized = true;
+  } 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 

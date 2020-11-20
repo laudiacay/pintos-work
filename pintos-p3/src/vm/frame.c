@@ -47,7 +47,7 @@ frame_init (void)
 static struct frame *
 try_frame_alloc_and_lock (struct page *page)
 {
-
+  return NULL;
 
 }
 

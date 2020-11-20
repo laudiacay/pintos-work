@@ -1,3 +1,6 @@
+#ifndef VM_SWAP_H
+#define VM_SWAP_H
+
 #include "threads/synch.h"
 #include "page.h"
 #include "lib/kernel/bitmap.h"
@@ -19,3 +22,4 @@ static struct lock swap_lock;
 void swap_init (void);
 bool swap_in (struct page *p);
 bool swap_out (struct page *p);
+#endif

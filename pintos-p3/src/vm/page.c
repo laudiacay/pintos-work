@@ -3,7 +3,7 @@
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
 static void
-destroy_page (struct hash_elem *p_, void *aux)
+destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
 
 }
@@ -19,17 +19,17 @@ page_exit (void)
    or a null pointer if no such page exists.
    Allocates stack pages as necessary. */
 static struct page *
-page_for_addr (const void *address)
+page_for_addr (const void *address )
 {
-
+  return NULL;
 }
 
 /* Locks a frame for page P and pages it in.
    Returns true if successful, false on failure. */
 static bool
-do_page_in (struct page *p)
+do_page_in (struct page *p )
 {
-
+  return false;
 }
 
 /* Faults in the page containing FAULT_ADDR.
@@ -37,25 +37,25 @@ do_page_in (struct page *p)
 bool
 page_in (void *fault_addr)
 {
-
+  return false;
 }
 
 /* Evicts page P.
    P must have a locked frame.
    Return true if successful, false on failure. */
 bool
-page_out (struct page *p)
+page_out (struct page *p )
 {
-
+  return false;
 }
 
 /* Returns true if page P's data has been accessed recently,
    false otherwise.
    P must have a frame locked into memory. */
 bool
-page_accessed_recently (struct page *p) 
+page_accessed_recently (struct page *p ) 
 {
-
+  return false;
 }
 
 /* Adds a mapping for user virtual address VADDR to the page hash
@@ -83,14 +83,14 @@ page_allocate (void *vaddr, bool read_only)
 /* Evicts the page containing address VADDR
    and removes it from the page table. */
 void
-page_deallocate (void *vaddr)
+page_deallocate (void *vaddr )
 {
 
 }
 
 /* Returns a hash value for the page that E refers to. */
 unsigned
-page_hash (const struct hash_elem *e, void *aux)
+page_hash (const struct hash_elem *e , void *aux UNUSED)
 {
    const struct page *p = hash_entry (e, struct page, hash_elem);
    return hash_bytes (&p->uaddr, sizeof p->uaddr);
@@ -98,7 +98,7 @@ page_hash (const struct hash_elem *e, void *aux)
 
 /* Returns true if page A precedes page B. */
 bool
-page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux)
+page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED)
 {
    const struct page *a = hash_entry (a_, struct page, hash_elem);
    const struct page *b = hash_entry (b_, struct page, hash_elem);
@@ -110,16 +110,15 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux)
    otherwise it may be read-only.
    Returns true if successful, false on failure. */
 bool
-page_lock (const void *addr, bool will_write)
+page_lock (const void *addr , bool will_write )
 {
-
+  return false;
 }
 
 /* Unlocks a page locked with page_lock(). */
 void
-page_unlock (const void *addr)
+page_unlock (const void *addr )
 {
-
 }
 
 

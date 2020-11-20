@@ -61,7 +61,7 @@ frame_alloc_and_lock (struct page *page)
 {
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
-    if (f->page == NULL) {
+    if (lock_try_acquire(&f->lock)) {
       f->page = page;
       return f;
     }

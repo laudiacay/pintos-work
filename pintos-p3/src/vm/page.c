@@ -1,5 +1,7 @@
 #include "page.h"
 #include "threads/malloc.h"
+#include "frame.h"
+#include "threads/vaddr.h"
 
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
@@ -37,7 +39,10 @@ page_for_addr (const void *address )
 static bool
 do_page_in (struct page *p )
 {
-  return false;
+  struct frame* f = frame_alloc_and_lock(p);
+  if (!f) return false;
+  // ok.... how do you like put the data that should be in the frame... into the frame.....
+  return f;
 }
 
 /* Faults in the page containing FAULT_ADDR.
@@ -45,7 +50,14 @@ do_page_in (struct page *p )
 bool
 page_in (void *fault_addr)
 {
-  return false;
+  struct page* p = page_for_addr(fault_addr);
+  if (!p) return false;
+
+  // ?? ok now what tho...
+  // i think step 1 is to get it a slot in the frame table
+  // step 2 is to copy it into the frame table
+  return do_page_in(p);
+  //return false;
 }
 
 /* Evicts page P.

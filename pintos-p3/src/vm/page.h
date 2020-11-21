@@ -1,4 +1,3 @@
-
 #ifndef VM_PAGE_H
 #define VM_PAGE_H
 
@@ -10,19 +9,23 @@
 #include "filesys/filesys.h"
 #include "threads/thread.h"
 
+enum page_current_loc{FROMFILE, INFRAME, TOBEZEROED, INSWAP, INIT};
 
 struct page {
 	void *uaddr;
+  enum page_current_loc page_current_loc;
 	struct file *file;
 	off_t file_offset;
 	size_t file_bytes;
+  struct frame* frame;
+  bool read_only;
 	struct hash_elem hash_elem;
 };
 
-//static void destroy_page (struct hash_elem *p_, void *aux);
+static void destroy_page (struct hash_elem *p_, void *aux);
 void page_exit (void);
-//static struct page *page_for_addr (const void *address);
-//static bool do_page_in (struct page *p);
+static struct page *page_for_addr (const void *address);
+static bool do_page_in (struct page *p);
 bool page_in (void *fault_addr);
 bool page_out (struct page *p);
 bool page_accessed_recently (struct page *p);

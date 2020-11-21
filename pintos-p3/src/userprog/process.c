@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "userprog/syscall.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -34,21 +36,18 @@ char* space = " ";
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char fn_copy[60];
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  //fn_copy = palloc_get_page (0);
+  //if (fn_copy == NULL)
+  //  return TID_ERROR;
+  strlcpy (fn_copy, file_name, 60);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR) 
-    palloc_free_page (fn_copy); 
-
+  tid = thread_create (fn_copy, PRI_DEFAULT, start_process, file_name);
 
   return tid;
 }
@@ -69,7 +68,6 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-
   if (success) {
     thread_current()->wrapper->loaded = 1;
   }
@@ -79,9 +77,11 @@ start_process (void *file_name_)
 
   sema_up(&thread_current()->load_semaphore);
   
+  printf("loaded thread %s, success val %d\n", file_name_, success);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  //palloc_free_page (file_name);
+  
   if (!success) {
     thread_exit ();
   }
@@ -279,6 +279,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (!t->supp_pt_initialized) {
@@ -376,10 +377,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-  /* Set up stack. */
+  printf("about to setup stack\n");
   if (!setup_stack (esp, file_name))
     goto done;
-
+  printf("successfully set up stack\n");
+  
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -387,6 +389,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  printf("load success? %d\n", success);
+  printf("eip: %p , esp: %p\n", *eip, *esp);
   return success;
 }
 
@@ -460,7 +464,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
-
+  printf("in load_segment at thread %s\n", thread_current() -> name);
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
     {
@@ -474,7 +478,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       // NEW: load segment modification
       // calls page allocate and set page to file info mapping
       // ***************************************
+      printf("about to allocate a page...\n");
       struct page *p = page_allocate (upage, !writable);
+      printf("just allocated a page...\n");
 
       if (p == NULL)
         return false;
@@ -483,6 +489,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           p->file = file;
           p->file_offset = ofs;
           p->file_bytes = page_read_bytes;
+          p->page_current_loc = FROMFILE;
         }
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -497,10 +504,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp, const char *cmdline) 
 {
-  uint8_t *kpage;
+  //uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  /*kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
   {
     success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -511,8 +518,23 @@ setup_stack (void **esp, const char *cmdline)
       palloc_free_page (kpage);
       return success;
     }
-  } else {return false;}
+    } else {return false;}*/
 
+  struct page* p = page_allocate(PHYS_BASE - PGSIZE, false);
+  if (!p) {
+    printf("could not allocate page...\n");
+    return false;
+  }
+  p->page_current_loc= TOBEZEROED;
+  struct frame* f = frame_alloc_and_lock (p);
+  if (!f){
+    printf("could not lock a frame...\n");
+    return false;
+  } 
+  success = pagedir_set_page(thread_current()->pagedir, p->uaddr, f->base, true);
+  if (success)
+    *esp = PHYS_BASE;
+  else return success;
   if (sizeof(cmdline) > PGSIZE) {
     return false;
   }
@@ -536,7 +558,6 @@ setup_stack (void **esp, const char *cmdline)
       return false;
     }
   }
-
   char* argv_tracker = *esp;
 
   // word_align and push argv[argc]
@@ -573,6 +594,7 @@ setup_stack (void **esp, const char *cmdline)
   argc = 0;
   *esp -= sizeof(char*);
   memcpy(*esp, &argc, sizeof (void*));
+  frame_unlock(p->frame);
 
   return success;
 }

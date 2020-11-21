@@ -47,7 +47,7 @@ frame_init (void)
 
 /* Tries to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
-static struct frame *
+struct frame *
 try_frame_alloc_and_lock (struct page *page)
 {
   return NULL;
@@ -56,17 +56,24 @@ try_frame_alloc_and_lock (struct page *page)
 
 /* Tries really hard to allocate and lock a frame for PAGE.
    Returns the frame if successful, false on failure. */
-static struct frame *
+struct frame *
 frame_alloc_and_lock (struct page *page)
 {
+  lock_acquire(&scan_lock);
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
     if (lock_try_acquire(&f->lock)) {
-      f->page = page;
-      return f;
+      if (!f->page) {
+        f->page = page;
+        page->frame = f;
+        lock_release(&scan_lock);
+        return f;
+      }
+      lock_release(&f->lock);
     }
   }
   PANIC ("no free frames");
+  lock_release(&scan_lock);
   return NULL;
 
 }
@@ -75,8 +82,9 @@ frame_alloc_and_lock (struct page *page)
    Upon return, p->frame will not change until P is unlocked. */
 void
 frame_lock (struct page *p) {
-  
-
+  if (p->frame) {
+    lock_acquire(&p->frame->lock);
+  }
 }
 
 /* Releases frame F for use by another page.
@@ -85,7 +93,9 @@ frame_lock (struct page *p) {
 void
 frame_free (struct frame *f) {
   frame_unlock(f);
+  struct page* p = f -> page;
   f->page = NULL;
+  p -> frame = NULL;
 }
 
 /* Unlocks frame F, allowing it to be evicted.

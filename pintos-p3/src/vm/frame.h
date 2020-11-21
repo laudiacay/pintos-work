@@ -19,8 +19,8 @@ static size_t hand;
 
 
 void frame_init (void);
-static struct frame *try_frame_alloc_and_lock (struct page *page);
-static struct frame *frame_alloc_and_lock (struct page *page);
+struct frame *try_frame_alloc_and_lock (struct page *page);
+struct frame *frame_alloc_and_lock (struct page *page);
 void frame_lock (struct page *p);
 void frame_free (struct frame *f);
 void frame_unlock (struct frame *f);

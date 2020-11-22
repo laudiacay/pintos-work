@@ -29,7 +29,10 @@ page_exit (void)
 struct page *
 page_for_addr (const void *address)
 {
-  if (address > PHYS_BASE) return NULL;
+  if (address > PHYS_BASE){
+    //printf("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE);
+    return NULL;
+  }
   //printf("getting page for %p\n", address);
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
@@ -39,7 +42,7 @@ page_for_addr (const void *address)
   //printf("getting page for rounded %p\n", ht_page.uaddr);
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    //printf("gotteeem\n");
+    //printf("gotteeem for addr %p\n", address);
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE + STACK_MAX)
@@ -52,6 +55,7 @@ page_for_addr (const void *address)
 static bool
 do_page_in (struct page *p )
 {
+  //printf("CALLING DOPAGE_IN on page at uaddr %p\n", p->uaddr);
   ASSERT(!p->frame);
   struct frame* f = frame_alloc_and_lock(p);
   if (!f) return false;
@@ -81,7 +85,7 @@ do_page_in (struct page *p )
     break;
   }
   p -> page_current_loc = INFRAME;
-  return true;
+  return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, true);
 }
 
 /* Faults in the page containing FAULT_ADDR.
@@ -89,7 +93,7 @@ do_page_in (struct page *p )
 bool
 page_in (void *fault_addr)
 {
-  bool success;
+  //printf("CALLING PAGE_IN on %p\n", fault_addr);
   struct page* p = page_for_addr(fault_addr);
   if (!p) {
     //printf("could not get page for address\n");
@@ -106,9 +110,9 @@ page_in (void *fault_addr)
     }
   }
   // step 2 is to copy it into the frame table
-  success = pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, true);
   frame_unlock(p->frame);
-  return success;
+  // printf("its in p->frame at... %p\n", p->frame);
+  return true;
 }
 
 /* Evicts page P.
@@ -201,15 +205,44 @@ bool
 page_lock (const void *addr , bool will_write )
 {
   // TODO what do i do with will_write???
+  //printf("CALLING PAGE_LOCK\n");
   struct page* p = page_for_addr(addr);
-  if (!p) return false;
-  frame_alloc_and_lock(p);
+  //printf("what came out of page_for_addr: %p\n", p);
+  if (!p) {
+    //printf("failed to get page for addr... %p\n", addr);
+    return false;
+  }
+
+  // ?? ok now what tho...
+  // i think step 1 is to get it a slot in the frame table
+  if (!p->frame) {
+    //printf("ok it had no frame, good... %p\n", addr);
+    if (!do_page_in(p)) {
+      //printf("failed to do page in for addr... %p\n", addr);
+      return false;
+    }
+  } else {
+    //printf("p->frame was... %p", p->frame);
+    frame_lock(p);
+  }
+  // step 2 is to copy it into the frame table
+  return true;
+  //return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, true);
 }
 
 /* Unlocks a page locked with page_lock(). */
 void
 page_unlock (const void *addr )
 {
+  //printf("CALLING PAGE_UNLOCK\n");
+  struct page* p = page_for_addr(addr);
+  //printf("what came out of page_for_addr: %p\n", p);
+  if (!p) {
+    //printf("failed to get page for addr... %p\n", addr);
+    return false;
+  }
+  ASSERT(p->frame);
+  frame_unlock(p->frame);
 }
 
 

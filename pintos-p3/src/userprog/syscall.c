@@ -215,11 +215,11 @@ static int sys_read (uint8_t* args_start) {
   int fd;
   const void* buffer;
   unsigned size;
-  //printf("in sys_read******?\n");
   copy_in (&fd, args_start, sizeof(int));
   copy_in (&buffer, args_start + sizeof(int), sizeof(int));
   copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
   //check_buffer(buffer, size);
+  //printf("in sys_read******, goal buffer is %p?\n", buffer);
   struct file_in_thread* file;
   int retval = 0;
   if (fd != 0) {
@@ -248,12 +248,18 @@ static int sys_read (uint8_t* args_start) {
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_read_this_pass > 0) {
       if (fd == 0) {
-        page_lock(p, true);
+        page_lock(buffer, true);
         for (int i = 0; i < bytes_to_read_this_pass; i++) {
           ((char*)buffer)[i] = input_getc();
         }
+        page_unlock(buffer);
       } else {
+        //printf("about to lock page!\n");
+        page_lock(buffer, true);
+        //printf("locked page!\n");
         int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
+        //printf("about to unlock page!\n");
+        page_unlock(buffer);
         //printf("bytes_read: %d\n", bytes_read);
         if (bytes_read < 0) {
           total_bytes_read = -1;

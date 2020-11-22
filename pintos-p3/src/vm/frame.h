@@ -7,7 +7,7 @@
 struct frame {
 	struct page* page;
 	struct lock lock;
-	struct thread* owner;
+  bool locked;
 	void *base;
 };
 

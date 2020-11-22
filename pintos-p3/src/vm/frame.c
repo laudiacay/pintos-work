@@ -42,6 +42,7 @@ frame_init (void)
       lock_init (&f->lock);
       f->base = base;
       f->page = NULL;
+      f->locked = false;
     }
 }
 
@@ -55,21 +56,23 @@ try_frame_alloc_and_lock (struct page *page)
 }
 
 /* Tries really hard to allocate and lock a frame for PAGE.
+   PAGE may not have a frame.
    Returns the frame if successful, false on failure. */
 struct frame *
 frame_alloc_and_lock (struct page *page)
 {
-  if (page->frame) {
-    frame_lock(page);
-    return page->frame;
-  }
+  // printf("frame_alloc_and_lock time... for page at %p\n", page->uaddr);
+  ASSERT(!page->frame);
   lock_acquire(&scan_lock);
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
+    //printf("about to try and lock frame at %p\n", f->base);
     if (lock_try_acquire(&f->lock)) {
       if (!f->page) {
         f->page = page;
         page->frame = f;
+        f->locked=true;
+        //printf("LOCKING %p into frame at %p\n", page->uaddr, f->base);
         lock_release(&scan_lock);
         return f;
       }
@@ -87,7 +90,10 @@ frame_alloc_and_lock (struct page *page)
 void
 frame_lock (struct page *p) {
   if (p->frame) {
+    ASSERT(!p->frame->locked);
+    //printf("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base);
     lock_acquire(&p->frame->lock);
+    p->frame->locked = true;
   }
 }
 
@@ -106,6 +112,8 @@ frame_free (struct frame *f) {
    F must be locked for use by the current process. */
 void
 frame_unlock (struct frame *f) {
-  ASSERT((f->lock).holder == thread_current());
+  ASSERT(f->locked && (f->lock).holder == thread_current());
+  //printf("UNLOCKING %p into frame at %p\n", f->page->uaddr, f->base);
   lock_release(&f->lock);
+  f->locked = false;
 }

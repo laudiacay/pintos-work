@@ -20,6 +20,7 @@ struct page {
   struct frame* frame;
   bool writable;
 	struct hash_elem hash_elem;
+	uint32_t sector; // sector index
 };
 
 static void destroy_page (struct hash_elem *p_, void *aux);

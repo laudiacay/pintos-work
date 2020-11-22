@@ -3,6 +3,7 @@
 
 #include "threads/synch.h"
 #include "page.h"
+#include "frame.h"
 #include "lib/kernel/bitmap.h"
 #include "devices/block.h"
 #include "threads/vaddr.h"
@@ -20,6 +21,6 @@ static struct lock swap_lock;
 #define PAGE_SECTORS (PGSIZE / BLOCK_SECTOR_SIZE)
 
 void swap_init (void);
-//bool swap_in (struct page *p);
-//bool swap_out (struct page *p);
+bool swap_in (struct page *p);
+bool swap_out (struct page *p);
 #endif

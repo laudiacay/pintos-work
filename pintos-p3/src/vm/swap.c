@@ -39,25 +39,46 @@ swap_init (void)
 }
 
 /* Swaps in page P, which must have a locked frame
-   (and be swapped out). 
+   (and be swapped out). */
 bool
 swap_in (struct page *p)
 {
-    // might want to use these functions:
-    // - lock_held_by_current_thread()
-    // - block_read()
-    // - bitmap_reset()
+  if (lock_held_by_current_thread(&p->frame->lock)
+        && p->page_current_loc == INSWAP)
+  {
+    lock_acquire (&swap_lock);
+    uint32_t sector = p->sector;
+    char *c = (char *) p->frame->base;
+    int i;
+    for (i = 0; i < PAGE_SECTORS; i++) {
+      block_read (swap_device, sector * PAGE_SECTORS + i, c);
+      c += BLOCK_SECTOR_SIZE;
+    }
+    bitmap_reset (swap_bitmap, sector);
+    lock_release (&swap_lock);
+    return true;
+  }
+  return false;
 }
 
-/* Swaps out page P, which must have a locked frame. 
+/* Swaps out page P, which must have a locked frame. */
 bool 
 swap_out (struct page *p) 
 {
-  
-  // might want to use these functions:
-  // - lock_held_by_current_thread()
-  // - bitmap_scan_and_flip()
-  // - block_write()
+  if (lock_held_by_current_thread(&p->frame->lock))
+  {
+    lock_acquire (&swap_lock);
+    char *c = (char *) p->frame->base;
+    size_t sector_num = bitmap_scan_and_flip (swap_bitmap, 0, 1, false);
+    p->sector = sector_num;
+    int i;
+    for (i = 0; i < PAGE_SECTORS; i++) {
+      block_write (swap_device, sector_num * PAGE_SECTORS + i, c);
+      c += BLOCK_SECTOR_SIZE;
+    }
+    lock_release (&swap_lock);
+    return true;
+  }
+  return false;
     
-  
-  }*/
+}

@@ -14,19 +14,19 @@
 
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
-static int sys_write (uint8_t*);
-static int sys_exit (uint8_t*);
-static void sys_halt (uint8_t*);
-static int sys_wait (uint8_t*);
-static pid_t sys_exec (uint8_t*);
-static bool sys_create (uint8_t*);
-static bool sys_remove (uint8_t*);
-static int sys_open (uint8_t*);
-static int sys_filesize (uint8_t*);
-static int sys_read (uint8_t* args_start);
-static void sys_seek (uint8_t* args_start);
-static unsigned sys_tell (uint8_t* args_start);
-static void sys_close (uint8_t* args_start);
+static int sys_write (uint8_t*, void*);
+static int sys_exit (uint8_t*, void*);
+static void sys_halt (uint8_t*, void*);
+static int sys_wait (uint8_t*, void*);
+static pid_t sys_exec (uint8_t*, void*);
+static bool sys_create (uint8_t*, void*);
+static bool sys_remove (uint8_t*, void*);
+static int sys_open (uint8_t*, void*);
+static int sys_filesize (uint8_t*, void*);
+static int sys_read (uint8_t*, void*);
+static void sys_seek (uint8_t*, void*);
+static unsigned sys_tell (uint8_t*, void*);
+static void sys_close (uint8_t*, void*);
 
 void check_buffer(const void *buffer, unsigned size);
 void check_ptr(const void *ptr);
@@ -103,7 +103,7 @@ syscall_handler (struct intr_frame *f)
   }
 
   unsigned call_nr = 0;
-  static int(*syscall)(uint8_t *);
+  static int(*syscall)(uint8_t *, void*);
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
   DEBUG_PRINT(("made it to syscall handler?\n"));
   switch (call_nr) {
@@ -140,17 +140,17 @@ syscall_handler (struct intr_frame *f)
   if (syscall != NULL){
     //printf("about to do syscall\n");
     //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
-    f->eax = syscall(f->esp + sizeof (call_nr));
+    f->eax = syscall(f->esp + sizeof (call_nr), f->esp);
   }
   else f->eax = -1;
 }
 
-static void sys_halt (uint8_t* args_start) {
+static void sys_halt (uint8_t* args_start, void* esp UNUSED) {
   shutdown_power_off();
 }
 
 
-static pid_t sys_exec (uint8_t* args_start) {
+static pid_t sys_exec (uint8_t* args_start, void* esp UNUSED) {
   
   char *cmd_line;
   //DEBUG_PRINT(("in sys_exec***\n"));
@@ -189,13 +189,13 @@ static pid_t sys_exec (uint8_t* args_start) {
 
 }
 
-static int sys_wait (uint8_t* args_start) {
+static int sys_wait (uint8_t* args_start , void* esp UNUSED) {
   tid_t child_id;
   copy_in (&child_id, args_start, sizeof(int));
   return process_wait(child_id);
 }
 
-static bool sys_create (uint8_t* args_start) {
+static bool sys_create (uint8_t* args_start, void* esp UNUSED) {
   char* file_name_ptr;
   copy_in(&file_name_ptr, args_start, sizeof(char*));
   unsigned size;
@@ -211,7 +211,7 @@ static bool sys_create (uint8_t* args_start) {
   return status;
 }
 
-static bool sys_remove (uint8_t* args_start) {
+static bool sys_remove (uint8_t* args_start , void* esp UNUSED) {
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
   check_ptr(file_name);
@@ -222,7 +222,7 @@ static bool sys_remove (uint8_t* args_start) {
   return status;
 }
 
-static int sys_read (uint8_t* args_start) {
+static int sys_read (uint8_t* args_start, void* esp) {
   // if (args_start == NULL)
   //   return -1;
   int args[3];
@@ -248,8 +248,8 @@ static int sys_read (uint8_t* args_start) {
     unsigned bytes_left_on_this_page = PGSIZE - pg_ofs(buffer);
     unsigned bytes_to_read_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
     //printf("left on this page: %d, to read this pass: %d, total rem.: %d\n", bytes_left_on_this_page, bytes_to_read_this_pass, size);
-    struct page *p = page_for_addr(buffer, NULL);
-    if (!p) {
+    struct page *p = page_for_addr(buffer, esp);
+    if (!p || !p->writable) {
       //printf("page_for addr said noooo\n");
       if (fd!=0) {
         lock_release(&file_lock);
@@ -260,14 +260,14 @@ static int sys_read (uint8_t* args_start) {
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_read_this_pass > 0) {
       if (fd == 0) {
-        page_lock(buffer, true, NULL);
+        page_lock(buffer, true, esp);
         for (int i = 0; i < bytes_to_read_this_pass; i++) {
           ((char*)buffer)[i] = input_getc();
         }
         page_unlock(buffer);
       } else {
         //printf("about to lock page!\n");
-        page_lock(buffer, true, NULL);
+        page_lock(buffer, true, esp);
         //printf("locked page!\n");
         int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
         //printf("about to unlock page!\n");
@@ -294,39 +294,8 @@ static int sys_read (uint8_t* args_start) {
   return total_bytes_read;
 }
 
-static int sys_read_old(uint8_t* args_start) {
-    // if (args_start == NULL)
-  //   return -1;
-  int args[3];
-  copy_in(&args, args_start, 3 * sizeof(int));
-  int fd = args[0];
-  const void* buffer = args[1];
-  unsigned size = args[2];
-  check_buffer(buffer, size);
-  int retval = 0;
-  if (fd == 0) {
-    int i;
-    uint8_t *store = (uint8_t *)buffer;
-    for (i = 0;i < size; i++) {
-      store[i] = input_getc();
-    }
-    return size;
-  }
-  else {
-    lock_acquire(&file_lock);
-    struct file_in_thread* file = get_file(fd);
-    if (file == NULL) {
-      lock_release(&file_lock);
-      return -1;
-    } 
-    retval = file_read(file->fileptr, buffer, size);
-    lock_release(&file_lock);
-  }
-  return retval;
-}
-
 /* Write system call. */
-static int sys_write (uint8_t* args_start) {
+static int sys_write (uint8_t* args_start, void* esp) {
   int args[3];
   copy_in(&args, args_start, 3 * sizeof(int));
   int fd = args[0];
@@ -359,7 +328,7 @@ static int sys_write (uint8_t* args_start) {
   return retval;
 }
 
-static int sys_exit(uint8_t* args_start) {
+static int sys_exit(uint8_t* args_start, void* esp UNUSED) {
   int status_code;
 
   copy_in (&status_code, args_start, sizeof(int));
@@ -371,7 +340,7 @@ static int sys_exit(uint8_t* args_start) {
   return status_code;
 }
 
-static int sys_open(uint8_t* args_start) {
+static int sys_open(uint8_t* args_start, void* esp UNUSED) {
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
 
@@ -393,7 +362,7 @@ static int sys_open(uint8_t* args_start) {
   return new_file->fd;
 }
 
-static int sys_filesize(uint8_t* args_start) {
+static int sys_filesize(uint8_t* args_start, void* esp UNUSED) {
   int fd;
   copy_in (&fd, args_start, sizeof(int));
   lock_acquire(&file_lock);
@@ -403,7 +372,7 @@ static int sys_filesize(uint8_t* args_start) {
   return filesize;
 }
 
-static void sys_seek (uint8_t* args_start) {
+static void sys_seek (uint8_t* args_start, void* esp UNUSED) {
   int args[2];
   copy_in(&args, args_start, 2 * sizeof(int));
   int fd = args[0];
@@ -419,7 +388,7 @@ static void sys_seek (uint8_t* args_start) {
   lock_release(&file_lock);
 }
 
-static unsigned sys_tell (uint8_t* args_start) {
+static unsigned sys_tell (uint8_t* args_start, void* esp UNUSED) {
   int fd;
   copy_in (&fd, args_start, sizeof(int));
 
@@ -434,7 +403,7 @@ static unsigned sys_tell (uint8_t* args_start) {
   return pos;
 }
 
-static void sys_close (uint8_t* args_start) {
+static void sys_close (uint8_t* args_start, void* esp UNUSED) {
   int fd;
   copy_in (&fd, args_start, sizeof(int));
 

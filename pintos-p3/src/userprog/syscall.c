@@ -104,10 +104,8 @@ syscall_handler (struct intr_frame *f)
 
   unsigned call_nr = 0;
   static int(*syscall)(uint8_t *);
-  //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
-  //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
-  //printf("made it?\n");
+  DEBUG_PRINT(("made it to syscall handler?\n"));
   switch (call_nr) {
   case SYS_WRITE: syscall = sys_write;
     break;
@@ -250,7 +248,7 @@ static int sys_read (uint8_t* args_start) {
     unsigned bytes_left_on_this_page = PGSIZE - pg_ofs(buffer);
     unsigned bytes_to_read_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
     //printf("left on this page: %d, to read this pass: %d, total rem.: %d\n", bytes_left_on_this_page, bytes_to_read_this_pass, size);
-    struct page *p = page_for_addr(buffer);
+    struct page *p = page_for_addr(buffer, NULL);
     if (!p) {
       //printf("page_for addr said noooo\n");
       if (fd!=0) {
@@ -262,14 +260,14 @@ static int sys_read (uint8_t* args_start) {
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_read_this_pass > 0) {
       if (fd == 0) {
-        page_lock(buffer, true);
+        page_lock(buffer, true, NULL);
         for (int i = 0; i < bytes_to_read_this_pass; i++) {
           ((char*)buffer)[i] = input_getc();
         }
         page_unlock(buffer);
       } else {
         //printf("about to lock page!\n");
-        page_lock(buffer, true);
+        page_lock(buffer, true, NULL);
         //printf("locked page!\n");
         int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
         //printf("about to unlock page!\n");
@@ -482,7 +480,6 @@ put_user (uint8_t *udst, uint8_t byte)
 }
 
 
-
 /* Copies SIZE bytes from user address USRC to kernel address DST.  Call
    thread_exit() if any of the user accesses are invalid. */ 
 
@@ -492,7 +489,7 @@ static void copy_in (void *dst_, const void *usrc_, size_t size) {
   while (i < size) {
     void* current_page = pg_round_down(usrc_ + i);
 
-    if (!page_lock(current_page, false)) {
+    if (!page_lock(current_page, false, NULL)) {
       DEBUG_PRINT(("could not pagelock us\n"));
       thread_exit();
     }
@@ -500,35 +497,15 @@ static void copy_in (void *dst_, const void *usrc_, size_t size) {
       //DEBUG_PRINT(("in for loop in copy_in\n"));
       
       //ASSERT(get_user(dst_+i, usrc_+1));
-      *((char*)(dst_ + i)) = *((char*)(usrc_ + i));
-      //if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
-      //  page_unlock(current_page);
-      //  palloc_free_page(ks);
-      //  thread_exit();
-      //}
+      //*((char*)(dst_ + i)) = *((char*)(usrc_ + i));
+      if (!get_user((uint8_t *)(dst_ + i), (const uint8_t *)(usrc_ + i))) {
+        page_unlock(current_page);
+        thread_exit();
+      }
     }
     page_unlock(current_page);
   }
 }
-
-
-static void old_copy_in (void *dst_, const void *usrc_, size_t size) { 
-  //printf("copying %d bytes to %p kernel from %p user\n", size, dst_, usrc_);
-  uint8_t *dst = dst_; 
-  const uint8_t *usrc = usrc_;
-  //printf("user ptr out of bounds? %d\n", usrc_ >= ( (uint8_t *) PHYS_BASE));
-  struct thread* t = thread_current();
-  for (; size > 0; size--, dst++, usrc++)
-    {
-      check_ptr(usrc_);
-      if (!get_user (dst, usrc)) {
-        t->exitstatus = -1;
-        thread_exit ();
-      }
-
-    }
-}
-
 
 /* Creates a copy of user string US in kernel memory and returns it as a
    page that must be **freed with palloc_free_page()**.  Truncates the string
@@ -548,19 +525,19 @@ copy_in_string (const char *us)
   while (i < PGSIZE) {
     void* current_page = pg_round_down(us + i);
 
-    if (!page_lock(current_page, false)) {
+    if (!page_lock(current_page, false, NULL)) {
       DEBUG_PRINT(("could not pagelock us\n"));
       palloc_free_page(ks);
       thread_exit();
     }
     for (;us + i < current_page + PGSIZE && i < PGSIZE; i++) {
       //DEBUG_PRINT(("in loop in copy_in_string. us+i at %p, contents are %c\n", us + i, *(us+i)));
-      *(ks + i) = *(us + i);
-      //if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
-      //  page_unlock(current_page);
-      //  palloc_free_page(ks);
-      //  thread_exit();
-      //}
+      //*(ks + i) = *(us + i);
+      if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
+        page_unlock(current_page);
+        palloc_free_page(ks);
+        thread_exit();
+      }
       //printf("just copied into ks + i, %c, %d\n", *(ks+i), *(ks+i));
       if (*(ks + i) == '\x00') break;
     }

@@ -28,27 +28,40 @@ page_exit (void)
    or a null pointer if no such page exists.
    Allocates stack pages as necessary. */
 struct page *
-page_for_addr (const void *address)
+page_for_addr (const void *address, void* esp)
 {
-  if (address > PHYS_BASE){
+  if (address >= PHYS_BASE){
     DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
     return NULL;
   }
-  //DEBUG_PRINT(("getting page for %p\n", address));
+  DEBUG_PRINT(("getting page for %p\n", address));
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  //DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
+  DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    //DEBUG_PRINT(("gotteeem for addr %p\n", address));
+    DEBUG_PRINT(("gotteeem for addr %p\n", address));
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
-  if (address > PHYS_BASE + STACK_MAX)
-    return page_allocate(address, false);
-  else return NULL;
+  if (address > PHYS_BASE - STACK_MAX) {
+    ASSERT(esp);
+    DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
+    if (address == esp - 4 || address == esp - 32) {
+      DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
+      struct page* p = page_allocate(address, false);
+      p -> page_current_loc = TOBEZEROED;
+    } else {
+      
+      DEBUG_PRINT(("decided not to...\n"));
+      return NULL;
+    }
+  } else {
+      DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
+      return NULL;
+  }
 }
 
 /* Locks a frame for page P and pages it in.
@@ -92,10 +105,14 @@ do_page_in (struct page *p )
 /* Faults in the page containing FAULT_ADDR.
    Returns true if successful, false on failure. */
 bool
-page_in (void *fault_addr)
+page_in (void *fault_addr, void* esp)
 {
   DEBUG_PRINT(("CALLING PAGE_IN on %p\n", fault_addr));
-  struct page* p = page_for_addr(fault_addr);
+  //if (esp > fault_addr && esp != fault_addr + 4 && esp != fault_addr + 32) {
+  //  DEBUG_PRINT(("esp is %p, fault_addr is %p, this is not going to work\n", esp, fault_addr));
+  //  return false;
+  //}
+  struct page* p = page_for_addr(fault_addr, esp);
   if (!p) {
     DEBUG_PRINT(("could not get page for address\n"));
     return false;
@@ -203,11 +220,11 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
    otherwise it may be read-only.
    Returns true if successful, false on failure. */
 bool
-page_lock (const void *addr , bool will_write )
+page_lock (const void *addr , bool will_write, void* esp)
 {
   // TODO what do i do with will_write???
   DEBUG_PRINT(("CALLING PAGE_LOCK on addr %p\n", addr));
-  struct page* p = page_for_addr(addr);
+  struct page* p = page_for_addr(addr, esp);
   //DEBUG_PRINT(("what came out of page_for_addr: %p\n", p));
   if (!p) {
     //DEBUG_PRINT(("failed to get page for addr... %p\n", addr));
@@ -232,10 +249,10 @@ page_lock (const void *addr , bool will_write )
 
 /* Unlocks a page locked with page_lock(). */
 void
-page_unlock (const void *addr )
+page_unlock (const void *addr)
 {
   DEBUG_PRINT(("CALLING PAGE_UNLOCK\n"));
-  struct page* p = page_for_addr(addr);
+  struct page* p = page_for_addr(addr, NULL);
   //DEBUG_PRINT(("what came out of page_for_addr: %p\n", p));
   if (!p) {
     DEBUG_PRINT(("failed to get page for addr... %p\n", addr));

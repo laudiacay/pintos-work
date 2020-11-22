@@ -158,8 +158,8 @@ page_fault (struct intr_frame *f)
      which fault_addr refers. */
 
   if (not_present && user) {
-      if (!page_in (fault_addr)) {
-        //printf("Tried to page in %p and failed. process dying.\n", fault_addr);
+    if (!page_in (fault_addr, f->esp)) {
+        DEBUG_PRINT(("Tried to page in %p and failed. process dying.\n", fault_addr));
         kill(f);
       } else return;
   }

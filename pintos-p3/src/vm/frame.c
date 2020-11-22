@@ -91,7 +91,7 @@ void
 frame_lock (struct page *p) {
   if (p->frame) {
     ASSERT(!p->frame->locked);
-    //printf("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base);
+    DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
     lock_acquire(&p->frame->lock);
     p->frame->locked = true;
   }

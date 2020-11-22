@@ -167,6 +167,7 @@ process_exit (void)
   sema_up(&cur->exit_semaphore);
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
+  page_exit();
   pd = cur->pagedir;
   if (pd != NULL) 
     {
@@ -184,8 +185,6 @@ process_exit (void)
       pagedir_destroy (pd);
       printf ("%s: exit(%d)\n", cur->name, cur->exitstatus);
     }
-  // TODO KILL THE OLD PAGEDIR AND FREE PAGES!!
-
 }
 
 /* Sets up the CPU for running user code in the current

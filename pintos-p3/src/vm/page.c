@@ -10,8 +10,12 @@ static void
 destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
   struct page * page = hash_entry(p_, struct page, hash_elem);
+  DEBUG_PRINT(("DESTROYING PAGE with address %p, vaddr %p\n", page, page->uaddr));
   if (page->frame) {
-    frame_lock(page->frame);
+    DEBUG_PRINT(("destroying page frame %p with kernel address %p\n", page->frame, page->frame->base));
+    DEBUG_PRINT(("about to lock up the frame\n"));
+    frame_lock(page);
+    DEBUG_PRINT(("about to free the frame\n"));
     frame_free(page->frame);
   }
   free(page);
@@ -21,7 +25,10 @@ destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 void
 page_exit (void)
 {
-
+  struct thread* t = thread_current();
+  if (t->supp_pt_initialized) {
+    hash_destroy(&t->supp_pt, destroy_page);
+  }
 }
 
 /* Returns the page containing the given virtual ADDRESS,
@@ -31,39 +38,39 @@ struct page *
 page_for_addr (const void *address, void* esp)
 {
   if (address >= PHYS_BASE){
-    DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
+    //DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
     return NULL;
   }
-  DEBUG_PRINT(("getting page for %p\n", address));
+  //DEBUG_PRINT(("getting page for %p\n", address));
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
+  //DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    DEBUG_PRINT(("gotteeem for addr %p\n", address));
+    //DEBUG_PRINT(("gotteeem for addr %p\n", address));
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE - STACK_MAX) {
     if (!esp) {
-      DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
+      //DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
       return NULL;
     }
-    DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
+    //DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
     if (address >= esp || address == esp - 4 || address == esp - 32) {
-      DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
+      //DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
       struct page* p = page_allocate(address, false);
       p -> page_current_loc = TOBEZEROED;
       p->writable = true;
     } else {
       
-      DEBUG_PRINT(("decided not to...\n"));
+      //DEBUG_PRINT(("decided not to...\n"));
       return NULL;
     }
   } else {
-      DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
+    //DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
       return NULL;
   }
 }
@@ -264,6 +271,7 @@ page_unlock (const void *addr)
   }
   ASSERT(p->frame);
   frame_unlock(p->frame);
+  DEBUG_PRINT(("ESCAPED PAGE_UNLOCK\n"));
 }
 
 

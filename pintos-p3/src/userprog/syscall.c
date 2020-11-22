@@ -153,7 +153,7 @@ static void sys_halt (uint8_t* args_start, void* esp UNUSED) {
 static pid_t sys_exec (uint8_t* args_start, void* esp UNUSED) {
   
   char *cmd_line;
-  //DEBUG_PRINT(("in sys_exec***\n"));
+  DEBUG_PRINT(("in sys_exec***\n"));
   char* filename;
   copy_in (&filename, args_start, sizeof(char*));
   char* kernel_page = copy_in_string (filename);
@@ -190,6 +190,8 @@ static pid_t sys_exec (uint8_t* args_start, void* esp UNUSED) {
 }
 
 static int sys_wait (uint8_t* args_start , void* esp UNUSED) {
+  DEBUG_PRINT(("in sys_wait****\n"));
+
   tid_t child_id;
   copy_in (&child_id, args_start, sizeof(int));
   return process_wait(child_id);
@@ -222,6 +224,7 @@ static bool sys_remove (uint8_t* args_start , void* esp UNUSED) {
   return status;
 }
 
+
 static int sys_read (uint8_t* args_start, void* esp) {
   // if (args_start == NULL)
   //   return -1;
@@ -231,8 +234,8 @@ static int sys_read (uint8_t* args_start, void* esp) {
   const void* buffer = args[1];
   unsigned size = args[2];
   //check_buffer(buffer, size);
-  DEBUG_PRINT(("in sys_read******, goal buffer is %p?\n", buffer));
   struct file_in_thread* file;
+  DEBUG_PRINT(("in sys_read******, goal buffer is %p?\n", buffer));
   int retval = 0;
   if (fd != 0) {
     lock_acquire(&file_lock);
@@ -296,6 +299,7 @@ static int sys_read (uint8_t* args_start, void* esp) {
 
 /* Write system call. */
 static int sys_write (uint8_t* args_start, void* esp) {
+  DEBUG_PRINT(("in sys_write***\n"));
   int args[3];
   copy_in(&args, args_start, 3 * sizeof(int));
   int fd = args[0];
@@ -330,17 +334,20 @@ static int sys_write (uint8_t* args_start, void* esp) {
 
 static int sys_exit(uint8_t* args_start, void* esp UNUSED) {
   int status_code;
+  DEBUG_PRINT(("in sys_exit***\n"));
 
   copy_in (&status_code, args_start, sizeof(int));
   struct thread *cur = thread_current ();
   cur->exitstatus = status_code;
   cur->wrapper->exitstatus = status_code;
   thread_exit ();
+  DEBUG_PRINT(("finished sys_exit***\n"));
 
   return status_code;
 }
 
 static int sys_open(uint8_t* args_start, void* esp UNUSED) {
+  DEBUG_PRINT(("in sys_open***\n"));
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
 

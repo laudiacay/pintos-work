@@ -167,12 +167,11 @@ static pid_t sys_exec (uint8_t* args_start) {
   pid_t process_id = process_execute((const char*)kernel_page);
   //DEBUG_PRINT(("called process_execute***\n"));
   palloc_free_page (kernel_page);
-  /*if (process_id == TID_ERROR)
+  if (process_id == TID_ERROR)
     return -1;
 
   // find this process in current thread's children list
   struct child_wrapper* child = thread_current()->cur_child;
-  DEBUG_PRINT(("got a child_wrapper (This is wrong)\n"));
   if (child == NULL)
     return -1;
 
@@ -185,7 +184,8 @@ static pid_t sys_exec (uint8_t* args_start) {
   if (child->loaded == -1) {   // failed to load
     // child->exit_flag = 1;
     return -1;
-    }*/
+
+  }
 
   return process_id;
 

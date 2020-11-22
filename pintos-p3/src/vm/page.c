@@ -56,6 +56,7 @@ page_for_addr (const void *address, void* esp)
       DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
       struct page* p = page_allocate(address, false);
       p -> page_current_loc = TOBEZEROED;
+      p->writable = true;
     } else {
       
       DEBUG_PRINT(("decided not to...\n"));
@@ -102,7 +103,7 @@ do_page_in (struct page *p )
     break;
   }
   p -> page_current_loc = INFRAME;
-  return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, true);
+  return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
 }
 
 /* Faults in the page containing FAULT_ADDR.
@@ -166,7 +167,7 @@ page_allocate (void *vaddr, bool read_only)
    if (!p)
       return NULL;
    p->uaddr = pg_round_down(vaddr);
-   p->read_only = read_only;
+   p->writable = !read_only;
    p->frame = NULL;
    p->page_current_loc = INIT;
 

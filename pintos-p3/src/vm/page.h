@@ -18,7 +18,7 @@ struct page {
 	off_t file_offset;
 	size_t file_bytes;
   struct frame* frame;
-  bool read_only;
+  bool writable;
 	struct hash_elem hash_elem;
 };
 

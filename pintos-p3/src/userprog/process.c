@@ -478,9 +478,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       // NEW: load segment modification
       // calls page allocate and set page to file info mapping
       // ***************************************
-      printf("about to allocate a page...\n");
+      printf("about to allocate a page... for upage %p\n", upage);
       struct page *p = page_allocate (upage, !writable);
-      printf("just allocated a page...\n");
+      printf("just allocated a page... for upage %p\n", upage);
 
       if (p == NULL)
         return false;
@@ -491,6 +491,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           p->file_bytes = page_read_bytes;
           p->page_current_loc = FROMFILE;
         }
+      else {
+        p->page_current_loc = TOBEZEROED;
+        printf("allocating zero page?? %p\n", upage);
+      }
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       ofs += page_read_bytes;

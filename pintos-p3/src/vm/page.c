@@ -31,7 +31,7 @@ page_for_addr (const void *address)
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  printf("getting page for rounded %p\n", address);
+  printf("getting page for rounded %p\n", ht_page.uaddr);
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
     printf("gotteeem\n");
@@ -54,8 +54,14 @@ do_page_in (struct page *p )
   switch (p->page_current_loc) {
   case FROMFILE:
     memset (p->frame->base, 0, PGSIZE);
-    if (p->file_bytes != file_read_at (p->file, p->frame->base,
-                                       p->file_bytes, p->file_offset)) return false;
+    printf("p->file_bytes: %d\n", p->file_bytes);
+      off_t actual_read_bytes = file_read_at (p->file, p->frame->base,
+                                              p->file_bytes, p->file_offset);
+    if (p->file_bytes != actual_read_bytes){
+      printf("those were not the same... actual_read_bytes was %d\n", actual_read_bytes);
+      return false;
+    }
+    break;
   case TOBEZEROED:
     memset(p->frame->base, 0, PGSIZE);
     break;

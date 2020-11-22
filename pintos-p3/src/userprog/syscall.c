@@ -231,7 +231,7 @@ static int sys_read (uint8_t* args_start) {
   const void* buffer = args[1];
   unsigned size = args[2];
   //check_buffer(buffer, size);
-  //printf("in sys_read******, goal buffer is %p?\n", buffer);
+  DEBUG_PRINT(("in sys_read******, goal buffer is %p?\n", buffer));
   struct file_in_thread* file;
   int retval = 0;
   if (fd != 0) {

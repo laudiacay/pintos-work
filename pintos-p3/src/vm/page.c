@@ -47,9 +47,12 @@ page_for_addr (const void *address, void* esp)
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE - STACK_MAX) {
-    ASSERT(esp);
+    if (!esp) {
+      DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
+      return NULL;
+    }
     DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
-    if (address == esp - 4 || address == esp - 32) {
+    if (address >= esp || address == esp - 4 || address == esp - 32) {
       DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
       struct page* p = page_allocate(address, false);
       p -> page_current_loc = TOBEZEROED;

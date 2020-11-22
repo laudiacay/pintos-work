@@ -238,7 +238,11 @@ static int sys_read (uint8_t* args_start) {
     //printf("left on this page: %d, to read this pass: %d, total rem.: %d\n", bytes_left_on_this_page, bytes_to_read_this_pass, size);
     struct page *p = page_for_addr(buffer);
     if (!p) {
-      thread_current()->exitstatus = -1;
+      //printf("page_for addr said noooo\n");
+      if (fd!=0) {
+        lock_release(&file_lock);
+      }
+      //thread_current()->exitstatus = -1;
       thread_exit();
     }
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;

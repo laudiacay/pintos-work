@@ -202,6 +202,7 @@ thread_create (const char *name, int priority,
   // add this thread to kernel thread's children list
   struct thread *kernel_t = thread_current();
   t->parent = kernel_t->tid;
+  t->cmdline_page = aux;
   struct child_wrapper *childwp = malloc(sizeof(struct child_wrapper));
   childwp->realchild = t;
   childwp->tid = tid;

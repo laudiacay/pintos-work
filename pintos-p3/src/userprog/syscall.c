@@ -85,7 +85,7 @@ check_buffer(const void *buffer, unsigned size) {
   }
 }
 
-//static char * copy_in_string (const char *);
+static char * copy_in_string (const char *);
 void
 syscall_init (void) 
 {
@@ -104,7 +104,9 @@ syscall_handler (struct intr_frame *f)
 
   unsigned call_nr = 0;
   static int(*syscall)(uint8_t *);
+  //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
+  //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
   //printf("made it?\n");
   switch (call_nr) {
   case SYS_WRITE: syscall = sys_write;
@@ -139,6 +141,7 @@ syscall_handler (struct intr_frame *f)
   }
   if (syscall != NULL){
     //printf("about to do syscall\n");
+    //printf("doing syscall with argument of f->esp + sizeof(call_nr): %s\n", f->esp + sizeof(call_nr));
     f->eax = syscall(f->esp + sizeof (call_nr));
   }
   else f->eax = -1;
@@ -152,26 +155,37 @@ static void sys_halt (uint8_t* args_start) {
 static pid_t sys_exec (uint8_t* args_start) {
   
   char *cmd_line;
-  copy_in (&cmd_line, args_start, sizeof(char*));
-  check_str(cmd_line);
+  //DEBUG_PRINT(("in sys_exec***\n"));
+  char* filename;
+  copy_in (&filename, args_start, sizeof(char*));
+  char* kernel_page = copy_in_string (filename);
+  //check_str(cmd_line);
+  //printf("****the kernel page is %p in kernel space\n", (void*)kernel_page);
+  //DEBUG_PRINT(("copied in cmdline*** %s\n", kernel_page));
   
-  pid_t process_id = process_execute((const char*)cmd_line);
-  if (process_id == TID_ERROR)
+  //DEBUG_PRINT(("args_start is %s\n", args_start));
+  pid_t process_id = process_execute((const char*)kernel_page);
+  //DEBUG_PRINT(("called process_execute***\n"));
+  palloc_free_page (kernel_page);
+  /*if (process_id == TID_ERROR)
     return -1;
 
   // find this process in current thread's children list
   struct child_wrapper* child = thread_current()->cur_child;
+  DEBUG_PRINT(("got a child_wrapper (This is wrong)\n"));
   if (child == NULL)
     return -1;
 
   // wait for the child process to load
   if (child->loaded == 0) {
+    DEBUG_PRINT(("about to call semadown on the kid\n"));
     sema_down(&child->realchild->load_semaphore);
+    DEBUG_PRINT(("just called semadown on the kid\n"));
   }
   if (child->loaded == -1) {   // failed to load
     // child->exit_flag = 1;
     return -1;
-  }
+    }*/
 
   return process_id;
 
@@ -184,17 +198,18 @@ static int sys_wait (uint8_t* args_start) {
 }
 
 static bool sys_create (uint8_t* args_start) {
-  char *file_name;
+  char* file_name_ptr;
+  copy_in(&file_name_ptr, args_start, sizeof(char*));
   unsigned size;
-  copy_in (&file_name, args_start, sizeof(char*));
-  copy_in (&size, args_start + sizeof(char*), sizeof(int));
+  copy_in(&size, args_start+sizeof(char*), sizeof(int));
 
-  check_ptr(file_name);
-  check_str(file_name);
+  char* file_name = copy_in_string (file_name_ptr);
 
   lock_acquire(&file_lock);
   bool status = filesys_create(file_name, size);
+  DEBUG_PRINT(("status from filesys_create %d\n", status));
   lock_release(&file_lock);
+  palloc_free_page(file_name);
   return status;
 }
 
@@ -212,12 +227,11 @@ static bool sys_remove (uint8_t* args_start) {
 static int sys_read (uint8_t* args_start) {
   // if (args_start == NULL)
   //   return -1;
-  int fd;
-  const void* buffer;
-  unsigned size;
-  copy_in (&fd, args_start, sizeof(int));
-  copy_in (&buffer, args_start + sizeof(int), sizeof(int));
-  copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
+  int args[3];
+  copy_in(&args, args_start, 3 * sizeof(int));
+  int fd = args[0];
+  const void* buffer = args[1];
+  unsigned size = args[2];
   //check_buffer(buffer, size);
   //printf("in sys_read******, goal buffer is %p?\n", buffer);
   struct file_in_thread* file;
@@ -285,12 +299,11 @@ static int sys_read (uint8_t* args_start) {
 static int sys_read_old(uint8_t* args_start) {
     // if (args_start == NULL)
   //   return -1;
-  int fd;
-  const void* buffer;
-  unsigned size;
-  copy_in (&fd, args_start, sizeof(int));
-  copy_in (&buffer, args_start + sizeof(int), sizeof(int));
-  copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
+  int args[3];
+  copy_in(&args, args_start, 3 * sizeof(int));
+  int fd = args[0];
+  const void* buffer = args[1];
+  unsigned size = args[2];
   check_buffer(buffer, size);
   int retval = 0;
   if (fd == 0) {
@@ -316,12 +329,11 @@ static int sys_read_old(uint8_t* args_start) {
 
 /* Write system call. */
 static int sys_write (uint8_t* args_start) {
-  int fd;
-  const void* buffer;
-  unsigned size;
-  copy_in (&fd, args_start, sizeof(int));
-  copy_in (&buffer, args_start + sizeof(int), sizeof(int));
-  copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
+  int args[3];
+  copy_in(&args, args_start, 3 * sizeof(int));
+  int fd = args[0];
+  const void* buffer = args[1];
+  unsigned size = args[2];
   check_buffer(buffer, size);
 
   int size_to_write = size;
@@ -394,10 +406,10 @@ static int sys_filesize(uint8_t* args_start) {
 }
 
 static void sys_seek (uint8_t* args_start) {
-  int fd;
-  unsigned position;
-  copy_in (&fd, args_start, sizeof(int));
-  copy_in (&position, args_start+sizeof(int), sizeof(int));
+  int args[2];
+  copy_in(&args, args_start, 2 * sizeof(int));
+  int fd = args[0];
+  unsigned position = args[1];
 
   lock_acquire(&file_lock);
   struct file_in_thread* file = get_file(fd);
@@ -476,6 +488,32 @@ put_user (uint8_t *udst, uint8_t byte)
 
 static void copy_in (void *dst_, const void *usrc_, size_t size) { 
   //printf("copying %d bytes to %p kernel from %p user\n", size, dst_, usrc_);
+  int i = 0;
+  while (i < size) {
+    void* current_page = pg_round_down(usrc_ + i);
+
+    if (!page_lock(current_page, false)) {
+      DEBUG_PRINT(("could not pagelock us\n"));
+      thread_exit();
+    }
+    for (;usrc_ + i < current_page + PGSIZE && i < size; i++) {
+      //DEBUG_PRINT(("in for loop in copy_in\n"));
+      
+      //ASSERT(get_user(dst_+i, usrc_+1));
+      *((char*)(dst_ + i)) = *((char*)(usrc_ + i));
+      //if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
+      //  page_unlock(current_page);
+      //  palloc_free_page(ks);
+      //  thread_exit();
+      //}
+    }
+    page_unlock(current_page);
+  }
+}
+
+
+static void old_copy_in (void *dst_, const void *usrc_, size_t size) { 
+  //printf("copying %d bytes to %p kernel from %p user\n", size, dst_, usrc_);
   uint8_t *dst = dst_; 
   const uint8_t *usrc = usrc_;
   //printf("user ptr out of bounds? %d\n", usrc_ >= ( (uint8_t *) PHYS_BASE));
@@ -486,32 +524,53 @@ static void copy_in (void *dst_, const void *usrc_, size_t size) {
       if (!get_user (dst, usrc)) {
         t->exitstatus = -1;
         thread_exit ();
-    }
+      }
 
     }
 }
-
 
 
 /* Creates a copy of user string US in kernel memory and returns it as a
    page that must be **freed with palloc_free_page()**.  Truncates the string
    at PGSIZE bytes in size.  Call thread_exit() if any of the user accesses
    are invalid. */
-/*static char *
+static char *
 copy_in_string (const char *us)
 {
   char *ks;
 
   ks = palloc_get_page (0);
+  //printf("*****pallocing a page for a string at %p.\n", (void*) ks);
   if (ks == NULL)
     thread_exit ();
 
-  for (uint i = 0; i < PGSIZE; i++) {
-    if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) thread_exit();
+  int i = 0;
+  while (i < PGSIZE) {
+    void* current_page = pg_round_down(us + i);
+
+    if (!page_lock(current_page, false)) {
+      DEBUG_PRINT(("could not pagelock us\n"));
+      palloc_free_page(ks);
+      thread_exit();
+    }
+    for (;us + i < current_page + PGSIZE && i < PGSIZE; i++) {
+      //DEBUG_PRINT(("in loop in copy_in_string. us+i at %p, contents are %c\n", us + i, *(us+i)));
+      *(ks + i) = *(us + i);
+      //if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
+      //  page_unlock(current_page);
+      //  palloc_free_page(ks);
+      //  thread_exit();
+      //}
+      //printf("just copied into ks + i, %c, %d\n", *(ks+i), *(ks+i));
+      if (*(ks + i) == '\x00') break;
+    }
+    page_unlock(current_page);
+    //printf("ks + i, %c\n", *(ks+i));
     if (*(ks + i) == '\x00') break;
   }
+  //printf("ks is %s\n", ks);
   return ks;
 
   // TODO: don't forget to call palloc_free_page(..) when you're done
   // with this page, before you return to user from syscall
-  }*/
+  }

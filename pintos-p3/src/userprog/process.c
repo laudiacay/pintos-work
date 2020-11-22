@@ -37,17 +37,22 @@ tid_t
 process_execute (const char *file_name) 
 {
   char fn_copy[60];
+  char* page_of_filename;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  //fn_copy = palloc_get_page (0);
-  //if (fn_copy == NULL)
-  //  return TID_ERROR;
+  page_of_filename = palloc_get_page (0);
+  if (page_of_filename == NULL)
+    return TID_ERROR;
+  strlcpy (page_of_filename, file_name, PGSIZE);
   strlcpy (fn_copy, file_name, 60);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (fn_copy, PRI_DEFAULT, start_process, file_name);
+  //printf("in process_execute, file_name is %s\n", page_of_filename);
+  //printf("in process_execute, stored in a page at %p\n", page_of_filename);
+  //printf("in process_execute, fn_copy is %s\n", fn_copy);
+  tid = thread_create (fn_copy, PRI_DEFAULT, start_process, page_of_filename);
 
   return tid;
 }
@@ -58,6 +63,7 @@ static void
 start_process (void *file_name_)
 {
   char *file_name = file_name_;
+  //printf("in start_process, file_name is %s\n", file_name);
   struct intr_frame if_;
   bool success;
 
@@ -67,6 +73,8 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  //printf("loaded filename! going to free page %p.\n", (void*) file_name_);
+  palloc_free_page (file_name_);
 
   if (success) {
     thread_current()->wrapper->loaded = 1;
@@ -77,10 +85,9 @@ start_process (void *file_name_)
 
   sema_up(&thread_current()->load_semaphore);
   
-  //printf("loaded thread %s, success val %d\n", file_name_, success);
+  // printf("loaded thread %s, success val %d\n", thread_current()->name, success);
 
   /* If load failed, quit. */
-  //palloc_free_page (file_name);
   
   if (!success) {
     thread_exit ();

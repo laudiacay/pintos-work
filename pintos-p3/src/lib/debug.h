@@ -18,8 +18,15 @@ void debug_panic (const char *file, int line, const char *function,
 void debug_backtrace (void);
 void debug_backtrace_all (void);
 
+//#define DEBUG
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf x
+#else
+# define DEBUG_PRINT(x) do {} while (0)
 #endif
 
+#endif
 
 
 /* This is outside the header guard so that debug.h may be

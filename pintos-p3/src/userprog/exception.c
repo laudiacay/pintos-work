@@ -139,7 +139,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
-  printf("oh? a page fault on %p? what's this?\n", fault_addr);
+  //printf("oh? a page fault on %p? what's this?\n", fault_addr);
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -159,7 +159,7 @@ page_fault (struct intr_frame *f)
 
   if (not_present && user) {
       if (!page_in (fault_addr)) {
-        printf("Tried to page in %p and failed. process dying.\n", fault_addr);
+        //printf("Tried to page in %p and failed. process dying.\n", fault_addr);
         kill(f);
       } else return;
   }

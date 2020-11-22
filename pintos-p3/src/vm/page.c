@@ -8,7 +8,12 @@
 static void
 destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
-
+  struct page * page = hash_entry(p_, struct page, hash_elem);
+  if (page->frame) {
+    frame_lock(page->frame);
+    frame_free(page->frame);
+  }
+  free(page);
 }
 
 /* Destroys the current process's page table. */
@@ -21,20 +26,20 @@ page_exit (void)
 /* Returns the page containing the given virtual ADDRESS,
    or a null pointer if no such page exists.
    Allocates stack pages as necessary. */
-static struct page *
+struct page *
 page_for_addr (const void *address)
 {
   if (address > PHYS_BASE) return NULL;
-  printf("getting page for %p\n", address);
+  //printf("getting page for %p\n", address);
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  printf("getting page for rounded %p\n", ht_page.uaddr);
+  //printf("getting page for rounded %p\n", ht_page.uaddr);
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    printf("gotteeem\n");
+    //printf("gotteeem\n");
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE + STACK_MAX)
@@ -54,11 +59,11 @@ do_page_in (struct page *p )
   switch (p->page_current_loc) {
   case FROMFILE:
     memset (p->frame->base, 0, PGSIZE);
-    printf("p->file_bytes: %d\n", p->file_bytes);
+    //printf("p->file_bytes: %d\n", p->file_bytes);
       off_t actual_read_bytes = file_read_at (p->file, p->frame->base,
                                               p->file_bytes, p->file_offset);
     if (p->file_bytes != actual_read_bytes){
-      printf("those were not the same... actual_read_bytes was %d\n", actual_read_bytes);
+      //printf("those were not the same... actual_read_bytes was %d\n", actual_read_bytes);
       return false;
     }
     break;
@@ -87,7 +92,7 @@ page_in (void *fault_addr)
   bool success;
   struct page* p = page_for_addr(fault_addr);
   if (!p) {
-    printf("could not get page for address\n");
+    //printf("could not get page for address\n");
       return false;
   }
 
@@ -96,7 +101,7 @@ page_in (void *fault_addr)
   frame_lock(p);
   if (p->frame == NULL) {
     if (!do_page_in(p)) {
-      printf("failed to do_page_in\n");
+      //printf("failed to do_page_in\n");
       return false;
     }
   }
@@ -130,7 +135,8 @@ page_accessed_recently (struct page *p )
 struct page *
 page_allocate (void *vaddr, bool read_only)
 {
-   printf("allocating page for vaddr: %p\n", vaddr);
+  //printf("allocating page for vaddr: %p\n", vaddr);
+   
    struct page *p = malloc(sizeof(struct page));
    if (!p)
       return NULL;
@@ -145,6 +151,7 @@ page_allocate (void *vaddr, bool read_only)
      free(p);
      return NULL;
    }
+   //printf("allocated page for vaddr: %p\n", vaddr);
 
    return p;
 
@@ -155,7 +162,18 @@ page_allocate (void *vaddr, bool read_only)
 void
 page_deallocate (void *vaddr )
 {
+  struct thread* t = thread_current();
+  ASSERT(t->supp_pt_initialized);
+  struct page ht_page;
 
+  ht_page.uaddr = pg_round_down(vaddr);
+  struct hash_elem *found_page_elem = hash_delete(&t->supp_pt, &ht_page.hash_elem);
+  if (found_page_elem) {
+    struct page * page = hash_entry(found_page_elem, struct page, hash_elem);
+    frame_lock(page);
+    page_out(page);
+    destroy_page(found_page_elem, NULL);
+  }
 }
 
 /* Returns a hash value for the page that E refers to. */
@@ -182,7 +200,10 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
 bool
 page_lock (const void *addr , bool will_write )
 {
-  return false;
+  // TODO what do i do with will_write???
+  struct page* p = page_for_addr(addr);
+  if (!p) return false;
+  frame_alloc_and_lock(p);
 }
 
 /* Unlocks a page locked with page_lock(). */

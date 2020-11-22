@@ -9,6 +9,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
+#include "vm/page.h"
 #include <stdlib.h>
 
 static void syscall_handler (struct intr_frame *);
@@ -68,7 +69,7 @@ check_str (const void* str) {
 
 void
 check_ptr(const void *ptr) {
-  if (ptr == NULL || !is_user_vaddr(ptr) || !pagedir_get_page(thread_current()->pagedir, ptr) ) {
+  if (ptr == NULL || !is_user_vaddr(ptr) || !pagedir_get_page(thread_current()->pagedir, ptr)) {
     thread_current()->exitstatus = -1;
     thread_exit();
   }
@@ -210,6 +211,69 @@ static bool sys_remove (uint8_t* args_start) {
 
 static int sys_read (uint8_t* args_start) {
   // if (args_start == NULL)
+  //   return -1;
+  int fd;
+  const void* buffer;
+  unsigned size;
+  //printf("in sys_read******?\n");
+  copy_in (&fd, args_start, sizeof(int));
+  copy_in (&buffer, args_start + sizeof(int), sizeof(int));
+  copy_in (&size, args_start + 2 *sizeof(int), sizeof(int));
+  //check_buffer(buffer, size);
+  struct file_in_thread* file;
+  int retval = 0;
+  if (fd != 0) {
+    lock_acquire(&file_lock);
+    file = get_file(fd);
+    if (!file) {
+      lock_release(&file_lock);
+      return -1;
+    }
+  }
+  int ofs = 0;
+  int total_bytes_read = 0;
+  while (size > 0) {
+    unsigned bytes_left_on_this_page = PGSIZE - pg_ofs(buffer);
+    unsigned bytes_to_read_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
+    //printf("left on this page: %d, to read this pass: %d, total rem.: %d\n", bytes_left_on_this_page, bytes_to_read_this_pass, size);
+    struct page *p = page_for_addr(buffer);
+    if (!p) {
+      thread_current()->exitstatus = -1;
+      thread_exit();
+    }
+    if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
+    if (bytes_to_read_this_pass > 0) {
+      if (fd == 0) {
+        page_lock(p, true);
+        for (int i = 0; i < bytes_to_read_this_pass; i++) {
+          ((char*)buffer)[i] = input_getc();
+        }
+      } else {
+        int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
+        //printf("bytes_read: %d\n", bytes_read);
+        if (bytes_read < 0) {
+          total_bytes_read = -1;
+          break;
+        }
+        if (bytes_read < bytes_to_read_this_pass) {
+          total_bytes_read += bytes_read;
+          break;
+        }
+      }
+    }
+    total_bytes_read += bytes_to_read_this_pass;
+    ofs += bytes_to_read_this_pass;
+    buffer += bytes_to_read_this_pass;
+    size -= bytes_to_read_this_pass;
+  }
+  if (fd != 0) {
+    lock_release(&file_lock);
+  }
+  return total_bytes_read;
+}
+
+static int sys_read_old(uint8_t* args_start) {
+    // if (args_start == NULL)
   //   return -1;
   int fd;
   const void* buffer;

@@ -59,6 +59,10 @@ try_frame_alloc_and_lock (struct page *page)
 struct frame *
 frame_alloc_and_lock (struct page *page)
 {
+  if (page->frame) {
+    frame_lock(page);
+    return page->frame;
+  }
   lock_acquire(&scan_lock);
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
@@ -92,10 +96,10 @@ frame_lock (struct page *p) {
    Any data in F is lost. */
 void
 frame_free (struct frame *f) {
-  frame_unlock(f);
   struct page* p = f -> page;
   f->page = NULL;
   p -> frame = NULL;
+  frame_unlock(f);
 }
 
 /* Unlocks frame F, allowing it to be evicted.

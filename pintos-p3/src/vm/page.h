@@ -24,7 +24,7 @@ struct page {
 
 static void destroy_page (struct hash_elem *p_, void *aux);
 void page_exit (void);
-static struct page *page_for_addr (const void *address);
+struct page *page_for_addr (const void *address);
 static bool do_page_in (struct page *p);
 bool page_in (void *fault_addr);
 bool page_out (struct page *p);

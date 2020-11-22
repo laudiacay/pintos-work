@@ -155,7 +155,7 @@ process_exit (void)
     file_close (cur->exe_file);
   }
   lock_release(&file_lock);
-
+ 
   cur->wrapper->exit_flag = 1;
   sema_up(&cur->exit_semaphore);
   /* Destroy the current process's page directory and switch back
@@ -177,7 +177,7 @@ process_exit (void)
       pagedir_destroy (pd);
       printf ("%s: exit(%d)\n", cur->name, cur->exitstatus);
     }
-
+  // TODO KILL THE OLD PAGEDIR AND FREE PAGES!!
 
 }
 
@@ -282,6 +282,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
+  // need to destroy hashtable and pagedir if need be?
   if (!t->supp_pt_initialized) {
     hash_init (&t->supp_pt, page_hash, page_less, NULL);
     t->supp_pt_initialized = true;
@@ -393,7 +394,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   printf("eip: %p , esp: %p\n", *eip, *esp);
   return success;
 }
-
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -595,7 +595,7 @@ setup_stack (void **esp, const char *cmdline)
   *esp -= sizeof(char*);
   memcpy(*esp, &argc, sizeof (void*));
   frame_unlock(p->frame);
-
+  printf("aaa??? done setting up stack???\n");
   return success;
 }
 

@@ -73,7 +73,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  printf("loaded filename! going to free page %p.\n", (void*) file_name_);
+  //printf("loaded filename! going to free page %p.\n", (void*) file_name_);
   palloc_free_page (file_name_);
 
   if (success) {
@@ -83,7 +83,7 @@ start_process (void *file_name_)
     thread_current()->wrapper->loaded = -1;
   }
 
-  printf("calling semaup on thread %p.\n", thread_current);
+  //printf("calling semaup on thread %p.\n", thread_current);
   sema_up(&thread_current()->load_semaphore);
   
   // printf("loaded thread %s, success val %d\n", thread_current()->name, success);

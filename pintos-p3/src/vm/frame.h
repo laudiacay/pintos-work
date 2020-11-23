@@ -5,9 +5,8 @@
 #include "threads/thread.h"
 
 struct frame {
-	struct page* page;
 	struct lock lock;
-  bool locked;
+  struct page* page;
 	void *base;
 };
 

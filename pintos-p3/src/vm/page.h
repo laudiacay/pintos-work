@@ -19,6 +19,7 @@ struct page {
 	size_t file_bytes;
   struct frame* frame;
   bool writable;
+  struct thread* owner;
 	struct hash_elem hash_elem;
 	uint32_t sector; // sector index
 };

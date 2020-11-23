@@ -47,13 +47,11 @@ swap_in (struct page *p)
   DEBUG_PRINT(("calling swap_in on page at %p\n", p->uaddr));
   ASSERT(p);
   ASSERT(p->frame);
-  ASSERT(p->frame->locked);
   ASSERT(p->frame->lock.holder == thread_current());
   ASSERT(p->page_current_loc == INSWAP);
     lock_acquire (&swap_lock);
     ASSERT(p);
     ASSERT(p->frame);
-    ASSERT(p->frame->locked);
     ASSERT(p->frame->lock.holder == thread_current());
     ASSERT(p->page_current_loc == INSWAP);
     uint32_t sector = p->sector;
@@ -77,14 +75,12 @@ swap_out (struct page *p)
   DEBUG_PRINT(("calling swap_out on page at %p\n", p->uaddr));
   ASSERT(p);
   ASSERT(p->frame);
-  ASSERT(p->frame->locked);
   ASSERT(p->page_current_loc == INFRAME);
   ASSERT(p->frame->lock.holder == thread_current());
   //DEBUG_PRINT(("made it thru the asserts... %p\n", p->uaddr));
     lock_acquire (&swap_lock);
     ASSERT(p);
     ASSERT(p->frame);
-    ASSERT(p->frame->locked);
     ASSERT(p->page_current_loc == INFRAME);
     ASSERT(p->frame->lock.holder == thread_current());
     void *c = p->frame->base;

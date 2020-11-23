@@ -43,19 +43,19 @@ struct page *
 page_for_addr (const void *address, void* esp)
 {
   if (address >= PHYS_BASE){
-    //DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
+    DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
     return NULL;
   }
-  //DEBUG_PRINT(("getting page for %p\n", address));
+  DEBUG_PRINT(("getting page for %p\n", address));
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  //DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
+  DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    //DEBUG_PRINT(("gotteeem for addr %p\n", address));
+    DEBUG_PRINT(("gotteeem for addr %p\n", address));
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE - STACK_MAX) {
@@ -63,19 +63,19 @@ page_for_addr (const void *address, void* esp)
       DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
       return NULL;
     }
-    //DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
+    DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
     if (address >= esp || address == esp - 4 || address == esp - 32) {
-      //DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
+      DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
       struct page* p = page_allocate(address, false);
       p -> page_current_loc = TOBEZEROED;
       p->writable = true;
     } else {
       
-      //DEBUG_PRINT(("decided not to...\n"));
+      DEBUG_PRINT(("decided not to...\n"));
       return NULL;
     }
   } else {
-    //DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
+      DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
       return NULL;
   }
 }
@@ -136,29 +136,26 @@ page_in (void *fault_addr, void* esp)
     DEBUG_PRINT(("could not get page for address\n"));
     return false;
   }
-  DEBUG_PRINT(("got a page! %p\n", p->uaddr));
-
-  // ?? ok now what tho...
-  // i think step 1 is to get it a slot in the frame table
+  //DEBUG_PRINT(("got a page! %p\n", p->uaddr));
   frame_lock(p);
 
-  if (p->frame == NULL) {
-    ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL);
-    DEBUG_PRINT(("the frame was null...\n"));
-    ASSERT(p->page_current_loc != INFRAME);
+  if (!p->frame){
     if (!do_page_in(p)) {
       DEBUG_PRINT(("failed to do_page_in\n"));
+      if (p->frame) frame_unlock(p->frame);
       return false;
     }
-  } else {
   }
-  // step 2 is to copy it into the frame table
-  DEBUG_PRINT(("putting page %p into the pagetable at page ...\n", p->uaddr, p->frame->base));
-  pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
-  DEBUG_PRINT(("page %p in the pagetable at page %p...\n", p->uaddr, pagedir_get_page(thread_current()->pagedir, p->uaddr)));
-  DEBUG_PRINT(("page %p frame base at %p...\n", p->uaddr, p->frame->base));
+  ASSERT(p->frame);
+  ASSERT(p->frame->lock.holder == thread_current());
+  ASSERT(p->page_current_loc == INFRAME);
+  if (pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL) {
+    DEBUG_PRINT(("nothing in pagedir for address %p\n", p->uaddr));
+    pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
+  }
+  ASSERT(p->page_current_loc == INFRAME);
+  ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr));
   frame_unlock(p->frame);
-  DEBUG_PRINT(("%p IS NOW in p->frame at... %p\n", p-> uaddr, p->frame->base));
   return true;
 }
 
@@ -170,11 +167,9 @@ page_out (struct page *p )
 {
   DEBUG_PRINT(("calling page_out on page at %p\n", p->uaddr));
   ASSERT(p->frame);
-  ASSERT(p->frame->locked);
   ASSERT(p->frame->lock.holder == thread_current());
   ASSERT(p->page_current_loc == INFRAME);
   ASSERT(p->frame->page == p);
-  //ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr) == p->frame->base);
   if (!p->writable) {
     DEBUG_PRINT(("it is read only and therefore going to a file...\n", p->uaddr));
     p -> page_current_loc = FROMFILE;
@@ -185,13 +180,16 @@ page_out (struct page *p )
   }
   //DEBUG_PRINT(("did we make it thru this much of page_out %p\n", p->uaddr));
   //pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
-  DEBUG_PRINT(("clearing page %p from the pagetable at frame base ...\n", p->uaddr, p->frame->base));
-  DEBUG_PRINT(("page %p was in the pagetable at page %p...\n", p->uaddr, pagedir_get_page(thread_current()->pagedir, p->uaddr)));
-  bool success = pagedir_clear_page(thread_current()->pagedir, p->uaddr);
+  //DEBUG_PRINT(("clearing page %p from the pagetable at frame base ...\n", p->uaddr, p->frame->base));
+  //DEBUG_PRINT(("page %p was in the pagetable at page %p...\n", p->uaddr, pagedir_get_page(thread_current()->pagedir, p->uaddr)));
+  if (pagedir_get_page(p->owner->pagedir, p->uaddr)) {
+    pagedir_clear_page(p->owner->pagedir, p->uaddr);
+  }
+
   frame_free(p->frame);
   ASSERT(p->frame == NULL);
-  ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL);
-  return success;
+  //ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL);
+  return true;
 }
 
 /* Returns true if page P's data has been accessed recently,
@@ -217,6 +215,7 @@ page_allocate (void *vaddr, bool read_only)
    p->uaddr = pg_round_down(vaddr);
    p->writable = !read_only;
    p->frame = NULL;
+   p->owner = thread_current();
    p->page_current_loc = INIT;
 
    struct hash *s_pt = &thread_current()->supp_pt;
@@ -246,6 +245,7 @@ page_deallocate (void *vaddr )
     struct page * page = hash_entry(found_page_elem, struct page, hash_elem);
     frame_lock(page);
     page_out(page);
+    frame_unlock(page->frame);
     destroy_page(found_page_elem, NULL);
   }
 }
@@ -274,7 +274,7 @@ page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNU
 bool
 page_lock (const void *addr , bool will_write, void* esp)
 {
-  DEBUG_PRINT(("addr %p is maybe in the pagetable at page %p...\n", addr, pagedir_get_page(thread_current()->pagedir, addr)));
+  //DEBUG_PRINT(("addr %p is maybe in the pagetable at page %p...\n", addr, pagedir_get_page(thread_current()->pagedir, addr)));
   // TODO what do i do with will_write???
   DEBUG_PRINT(("%s is CALLING PAGE_LOCK on addr %p\n", thread_current() -> name, addr));
   struct page* p = page_for_addr(addr, esp);
@@ -292,18 +292,21 @@ page_lock (const void *addr , bool will_write, void* esp)
     if (!do_page_in(p)) {
       //DEBUG_PRINT(("failed to do page in for addr... %p\n", addr));
       PANIC("why cant i page in\n");
-    } else {
+    } 
 
       DEBUG_PRINT(("about to put page %p in the pagetable at page %p...\n", p->uaddr, p->frame->base));
-      return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
-    }
+      //return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
+      if (pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL) {
+        DEBUG_PRINT(("nothing in pagedir for address %p\n", p->uaddr));
+        pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
+      }
+      return true;
+    
   } else {
     // step 2 is to copy it into the frame table
-    if (pagedir_get_page(thread_current()->pagedir, p->uaddr) == NULL) {
-      DEBUG_PRINT(("about to put page %p in the pagetable at page %p... it had a frame but whatever\n", p->uaddr, p->frame->base));
-      return pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
-    }}
-  return true;
+    ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr));
+    return true;
+  }
 }
 
 /* Unlocks a page locked with page_lock(). */

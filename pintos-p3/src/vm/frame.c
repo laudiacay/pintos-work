@@ -43,7 +43,6 @@ frame_init (void)
       lock_init (&f->lock);
       f->base = base;
       f->page = NULL;
-      f->locked = false;
     }
   random_init(3);
 }
@@ -79,7 +78,7 @@ frame_alloc_and_lock (struct page *page)
 
         f->page = page;
         page->frame = f;
-        f->locked=true;
+        //pagedir_set_page(thread_current()->pagedir, page->uaddr, f->base, p->writable);
         lock_release(&scan_lock);
         return f;
       }
@@ -96,10 +95,10 @@ frame_alloc_and_lock (struct page *page)
 
     DEBUG_PRINT(("attempting to evict frame at base_addr %p\n", f->base));
     if (lock_try_acquire(&f->lock)) {
-      f->locked = true;
       struct page* page_to_evict = f->page;
       ASSERT(page_to_evict);
       ASSERT(page_to_evict->frame->page == page_to_evict);
+      //ASSERT(pagedir_get_page(thread_current()->pagedir, page_to_evict->uaddr) == page_to_evict->frame->base);
       DEBUG_PRINT(("got the lock, the page uaddr is %p\n", f->page->uaddr));
       ASSERT(page_to_evict->page_current_loc == INFRAME);
       page_out(page_to_evict);
@@ -130,13 +129,11 @@ frame_lock (struct page *p) {
     DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
     lock_acquire(&f->lock);
     if (f != p->frame) {
-      DEBUG_PRINT(("frame %p moved out from under page %p\n", f-> base, p->uaddr));
       lock_release(&f->lock);
       return;
     }
-    ASSERT(!p->frame->locked);
-    p->frame->locked = true;
     ASSERT(p == p->frame->page);
+    //ASSERT(pagedir_get_page(thread_current()->pagedir, p->uaddr) == p->frame->base);
   }
 }
 
@@ -147,14 +144,13 @@ void
 frame_free (struct frame *f) {
 
   ASSERT(f);
-  ASSERT(f->locked && (f->lock).holder == thread_current());
+  ASSERT((f->lock).holder == thread_current());
   ASSERT(f->page);
   DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
   struct page* p = f -> page;
   f->page = NULL;
   p -> frame = NULL;
   lock_release(&f->lock);
-  f->locked = false;
 }
 
 /* Unlocks frame F, allowing it to be evicted.
@@ -162,9 +158,8 @@ frame_free (struct frame *f) {
 void
 frame_unlock (struct frame *f) {
   ASSERT(f);
-  ASSERT(f->locked && (f->lock).holder == thread_current());
+  ASSERT((f->lock).holder == thread_current());
   ASSERT(f->page);
   DEBUG_PRINT(("UNLOCKING %p from frame at %p\n", f->page->uaddr, f->base));
   lock_release(&f->lock);
-  f->locked = false;
 }

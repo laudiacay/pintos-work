@@ -65,16 +65,21 @@ frame_alloc_and_lock (struct page *page)
 {
   DEBUG_PRINT(("frame_alloc_and_lock time... for page at %p\n", page->uaddr));
   ASSERT(!page->frame);
+  DEBUG_PRINT(("hmm\n"));
   lock_acquire(&scan_lock);
+  ASSERT(!page->frame);
+  DEBUG_PRINT(("mmhmm\n"));
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
     //printf("about to try and lock frame at %p\n", f->base);
     if (lock_try_acquire(&f->lock)) {
+      //DEBUG_PRINT(("coolbeans i have a lock for %p\n", f->base));
       if (!f->page) {
+        DEBUG_PRINT(("LOCKING %p into frame at %p\n", page->uaddr, f->base));
+
         f->page = page;
         page->frame = f;
         f->locked=true;
-        DEBUG_PRINT(("LOCKING %p into frame at %p\n", page->uaddr, f->base));
         lock_release(&scan_lock);
         return f;
       }
@@ -119,10 +124,17 @@ frame_alloc_and_lock (struct page *page)
    Upon return, p->frame will not change until P is unlocked. */
 void
 frame_lock (struct page *p) {
-  if (p->frame) {
+  ASSERT(p);
+  struct frame *f = p->frame;
+  if (f) {
+    DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
+    lock_acquire(&f->lock);
+    if (f != p->frame) {
+      DEBUG_PRINT(("frame %p moved out from under page %p\n", f-> base, p->uaddr));
+      lock_release(&f->lock);
+      return;
+    }
     ASSERT(!p->frame->locked);
-    //DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
-    lock_acquire(&p->frame->lock);
     p->frame->locked = true;
     ASSERT(p == p->frame->page);
   }
@@ -133,20 +145,26 @@ frame_lock (struct page *p) {
    Any data in F is lost. */
 void
 frame_free (struct frame *f) {
-  
-  //DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
+
+  ASSERT(f);
+  ASSERT(f->locked && (f->lock).holder == thread_current());
+  ASSERT(f->page);
+  DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
   struct page* p = f -> page;
-  frame_unlock(f);
   f->page = NULL;
   p -> frame = NULL;
+  lock_release(&f->lock);
+  f->locked = false;
 }
 
 /* Unlocks frame F, allowing it to be evicted.
    F must be locked for use by the current process. */
 void
 frame_unlock (struct frame *f) {
-  //DEBUG_PRINT(("UNLOCKING %p from frame at %p\n", f->page->uaddr, f->base));
+  ASSERT(f);
   ASSERT(f->locked && (f->lock).holder == thread_current());
+  ASSERT(f->page);
+  DEBUG_PRINT(("UNLOCKING %p from frame at %p\n", f->page->uaddr, f->base));
   lock_release(&f->lock);
   f->locked = false;
 }

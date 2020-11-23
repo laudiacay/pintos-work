@@ -73,7 +73,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  //printf("loaded filename! going to free page %p.\n", (void*) file_name_);
+  printf("loaded filename! going to free page %p.\n", (void*) file_name_);
   palloc_free_page (file_name_);
 
   if (success) {
@@ -83,6 +83,7 @@ start_process (void *file_name_)
     thread_current()->wrapper->loaded = -1;
   }
 
+  printf("calling semaup on thread %p.\n", thread_current);
   sema_up(&thread_current()->load_semaphore);
   
   // printf("loaded thread %s, success val %d\n", thread_current()->name, success);
@@ -118,7 +119,7 @@ process_wait (tid_t child_tid)
   struct thread *cur = thread_current();
   struct child_wrapper* child;
   struct list_elem *e;
-
+  DEBUG_PRINT(("process_wait in thread %p\n", cur));
   for (e = list_begin (&cur->children); e != list_end (&cur->children);
        e = list_next (e))
   {
@@ -486,6 +487,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       // ***************************************
       //printf("about to allocate a page... for upage %p\n", upage);
       struct page *p = page_allocate (upage, !writable);
+      //page_lock(upage, true, NULL);
       //nprintf("just allocated a page... for upage %p\n", upage);
 
       if (p == NULL)

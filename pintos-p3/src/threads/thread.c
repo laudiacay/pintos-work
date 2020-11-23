@@ -251,9 +251,8 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-
+  //printf("unblocking %p\n", t);
   ASSERT (is_thread (t));
-
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
@@ -594,6 +593,7 @@ schedule (void)
   if (cur != next)
     prev = switch_threads (cur, next);
   thread_schedule_tail (prev);
+  //printf("just scheduled tail at %p\n", cur);
 }
 
 /* Returns a tid to use for a new thread. */

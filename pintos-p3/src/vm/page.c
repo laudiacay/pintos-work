@@ -10,12 +10,13 @@ static void
 destroy_page (struct hash_elem *p_ , void *aux UNUSED)
 {
   struct page * page = hash_entry(p_, struct page, hash_elem);
-  DEBUG_PRINT(("DESTROYING PAGE with address %p, vaddr %p\n", page, page->uaddr));
+  //DEBUG_PRINT(("DESTROYING PAGE with address %p, vaddr %p\n", page, page->uaddr));
   if (page->frame) {
-    DEBUG_PRINT(("destroying page frame %p with kernel address %p\n", page->frame, page->frame->base));
-    DEBUG_PRINT(("about to lock up the frame\n"));
+    ASSERT(page == page->frame->page);
+    //DEBUG_PRINT(("destroying page frame %p with kernel address %p\n", page->frame, page->frame->base));
+    //DEBUG_PRINT(("about to lock up the frame\n"));
     frame_lock(page);
-    DEBUG_PRINT(("about to free the frame\n"));
+    //DEBUG_PRINT(("about to free the frame\n"));
     frame_free(page->frame);
   }
   free(page);
@@ -84,7 +85,7 @@ do_page_in (struct page *p )
   ASSERT(!p->frame);
   struct frame* f = frame_alloc_and_lock(p);
   if (!f) return false;
-  p->frame = f;
+  //p->frame = f;
   switch (p->page_current_loc) {
   case FROMFILE:
     memset (p->frame->base, 0, PGSIZE);
@@ -97,13 +98,15 @@ do_page_in (struct page *p )
     }
     break;
   case TOBEZEROED:
+    DEBUG_PRINT(("initializing a zero page for p\n"));
     memset(p->frame->base, 0, PGSIZE);
     break;
   case INFRAME:
     PANIC("should not be calling this if we are in the frame");
     break;
   case INSWAP:
-    PANIC("swap unimplemented");
+    DEBUG_PRINT(("swapping in p\n"));
+    swap_in(p);
     break;
   default:
     PANIC("whats this page current loc um");
@@ -140,7 +143,7 @@ page_in (void *fault_addr, void* esp)
   }
   // step 2 is to copy it into the frame table
   frame_unlock(p->frame);
-  DEBUG_PRINT(("its in p->frame at... %p\n", p->frame));
+  DEBUG_PRINT(("%p IS NOW in p->frame at... %p\n", p-> uaddr, p->frame->base));
   return true;
 }
 
@@ -150,7 +153,23 @@ page_in (void *fault_addr, void* esp)
 bool
 page_out (struct page *p )
 {
-  return false;
+  DEBUG_PRINT(("calling page_out on page at %p\n", p->uaddr));
+  ASSERT(p->frame);
+  ASSERT(p->frame->locked);
+  ASSERT(p->frame->lock.holder == thread_current());
+  ASSERT(p->page_current_loc == INFRAME);
+  if (!p->writable) {
+    DEBUG_PRINT(("it is read only and therefore going to a file...\n", p->uaddr));
+    p -> page_current_loc = FROMFILE;
+  } else {
+    DEBUG_PRINT(("it is not read only and therefore going to swap...\n", p->uaddr));
+    swap_out(p);
+    p -> page_current_loc = INSWAP;
+  }
+  //DEBUG_PRINT(("did we make it thru this much of page_out %p\n", p->uaddr));
+  bool success = pagedir_clear_page(thread_current()->pagedir, p->uaddr);
+  frame_free(p->frame);
+  return success;
 }
 
 /* Returns true if page P's data has been accessed recently,
@@ -168,7 +187,7 @@ page_accessed_recently (struct page *p )
 struct page *
 page_allocate (void *vaddr, bool read_only)
 {
-  DEBUG_PRINT(("allocating page for vaddr: %p\n", vaddr));
+  //DEBUG_PRINT(("allocating page for vaddr: %p\n", vaddr));
    
    struct page *p = malloc(sizeof(struct page));
    if (!p)
@@ -184,7 +203,7 @@ page_allocate (void *vaddr, bool read_only)
      free(p);
      return NULL;
    }
-   DEBUG_PRINT(("allocated page for vaddr: %p\n", vaddr));
+   //DEBUG_PRINT(("allocated page for vaddr: %p\n", vaddr));
 
    return p;
 
@@ -234,7 +253,7 @@ bool
 page_lock (const void *addr , bool will_write, void* esp)
 {
   // TODO what do i do with will_write???
-  DEBUG_PRINT(("CALLING PAGE_LOCK on addr %p\n", addr));
+  DEBUG_PRINT(("%s is CALLING PAGE_LOCK on addr %p\n", thread_current() -> name, addr));
   struct page* p = page_for_addr(addr, esp);
   //DEBUG_PRINT(("what came out of page_for_addr: %p\n", p));
   if (!p) {
@@ -262,7 +281,7 @@ page_lock (const void *addr , bool will_write, void* esp)
 void
 page_unlock (const void *addr)
 {
-  DEBUG_PRINT(("CALLING PAGE_UNLOCK\n"));
+  DEBUG_PRINT(("%s is CALLING PAGE_UNLOCK on addr %p\n", thread_current() -> name, addr));
   struct page* p = page_for_addr(addr, NULL);
   //DEBUG_PRINT(("what came out of page_for_addr: %p\n", p));
   if (!p) {
@@ -270,6 +289,7 @@ page_unlock (const void *addr)
     PANIC("we should be unlocking something that exists??");
   }
   ASSERT(p->frame);
+  ASSERT(p->frame->page == p);
   frame_unlock(p->frame);
   DEBUG_PRINT(("ESCAPED PAGE_UNLOCK\n"));
 }

@@ -3,6 +3,7 @@
 #include "threads/palloc.h"
 #include "threads/loader.h"
 #include <debug.h>
+#include <random.h>
 
 /*
 Managing the frame table
@@ -44,6 +45,7 @@ frame_init (void)
       f->page = NULL;
       f->locked = false;
     }
+  random_init(3);
 }
 
 /* Tries to allocate and lock a frame for PAGE.
@@ -61,7 +63,7 @@ try_frame_alloc_and_lock (struct page *page)
 struct frame *
 frame_alloc_and_lock (struct page *page)
 {
-  // printf("frame_alloc_and_lock time... for page at %p\n", page->uaddr);
+  DEBUG_PRINT(("frame_alloc_and_lock time... for page at %p\n", page->uaddr));
   ASSERT(!page->frame);
   lock_acquire(&scan_lock);
   for (int i = 0; i < frame_cnt; i++) {
@@ -72,11 +74,39 @@ frame_alloc_and_lock (struct page *page)
         f->page = page;
         page->frame = f;
         f->locked=true;
-        //printf("LOCKING %p into frame at %p\n", page->uaddr, f->base);
+        DEBUG_PRINT(("LOCKING %p into frame at %p\n", page->uaddr, f->base));
         lock_release(&scan_lock);
         return f;
       }
       lock_release(&f->lock);
+    }
+  }
+
+  // ok haha we are going to try to evict something random until we manage it :)
+  while(1) {
+    DEBUG_PRINT(("need to evict... trying again\n"));
+
+    unsigned int to_evict = random_ulong() % frame_cnt;
+    struct frame *f = &frames[to_evict];
+
+    DEBUG_PRINT(("attempting to evict frame at base_addr %p\n", f->base));
+    if (lock_try_acquire(&f->lock)) {
+      f->locked = true;
+      struct page* page_to_evict = f->page;
+      ASSERT(page_to_evict);
+      ASSERT(page_to_evict->frame->page == page_to_evict);
+      DEBUG_PRINT(("got the lock, the page uaddr is %p\n", f->page->uaddr));
+      ASSERT(page_to_evict->page_current_loc == INFRAME);
+      page_out(page_to_evict);
+      DEBUG_PRINT(("finished calling page_out on %p\n", page_to_evict->uaddr));
+      ASSERT(f);
+      ASSERT(page);
+      f->page = page;
+      page->frame = f;
+      frame_lock(page);
+      lock_release(&scan_lock);
+      DEBUG_PRINT(("evicted %p and installed %p at frame %p\n",page_to_evict->uaddr, f->page->uaddr, f->base));
+      return f;
     }
   }
   PANIC ("no free frames");
@@ -91,9 +121,10 @@ void
 frame_lock (struct page *p) {
   if (p->frame) {
     ASSERT(!p->frame->locked);
-    DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
+    //DEBUG_PRINT(("LOCKING %p into frame at %p\n", p->uaddr, p->frame->base));
     lock_acquire(&p->frame->lock);
     p->frame->locked = true;
+    ASSERT(p == p->frame->page);
   }
 }
 
@@ -102,18 +133,20 @@ frame_lock (struct page *p) {
    Any data in F is lost. */
 void
 frame_free (struct frame *f) {
+  
+  //DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
   struct page* p = f -> page;
+  frame_unlock(f);
   f->page = NULL;
   p -> frame = NULL;
-  frame_unlock(f);
 }
 
 /* Unlocks frame F, allowing it to be evicted.
    F must be locked for use by the current process. */
 void
 frame_unlock (struct frame *f) {
+  //DEBUG_PRINT(("UNLOCKING %p from frame at %p\n", f->page->uaddr, f->base));
   ASSERT(f->locked && (f->lock).holder == thread_current());
-  //printf("UNLOCKING %p into frame at %p\n", f->page->uaddr, f->base);
   lock_release(&f->lock);
   f->locked = false;
 }

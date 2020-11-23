@@ -262,29 +262,29 @@ static int sys_read (uint8_t* args_start, void* esp) {
     }
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_read_this_pass > 0) {
+      page_lock(buffer, true, esp);
       if (fd == 0) {
-        page_lock(buffer, true, esp);
         for (int i = 0; i < bytes_to_read_this_pass; i++) {
           ((char*)buffer)[i] = input_getc();
         }
-        page_unlock(buffer);
       } else {
         //printf("about to lock page!\n");
-        page_lock(buffer, true, esp);
         //printf("locked page!\n");
         int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
         //printf("about to unlock page!\n");
-        page_unlock(buffer);
         //printf("bytes_read: %d\n", bytes_read);
         if (bytes_read < 0) {
           total_bytes_read = -1;
+          page_unlock(buffer);
           break;
         }
         if (bytes_read < bytes_to_read_this_pass) {
           total_bytes_read += bytes_read;
+          page_unlock(buffer);
           break;
         }
       }
+      page_unlock(buffer);
     }
     total_bytes_read += bytes_to_read_this_pass;
     ofs += bytes_to_read_this_pass;
@@ -305,31 +305,72 @@ static int sys_write (uint8_t* args_start, void* esp) {
   int fd = args[0];
   const void* buffer = args[1];
   unsigned size = args[2];
-  check_buffer(buffer, size);
-
-  int size_to_write = size;
+  //check_buffer(buffer, size);
+  struct file_in_thread* file;
+  DEBUG_PRINT(("in sys_write******, from buffer file is %p?\n", buffer));
   int retval = 0;
-  // if the handle is stdout, need to do chunks at a time until sizetowrite is zero
-  if (fd == 1) {
-    int write_amt;
-    write_amt = size_to_write > 300 ? 300 : size_to_write;
-    while (size_to_write > 0) {
-      putbuf (buffer + retval, write_amt);
-      retval += write_amt;
-      size_to_write -= write_amt;
-    }
-  }
-  else {
+  if (fd != 1) {
     lock_acquire(&file_lock);
-    struct file_in_thread* file = get_file(fd);
-    if (file == NULL) {
+    file = get_file(fd);
+    if (!file) {
       lock_release(&file_lock);
       return -1;
-    } 
-    retval = file_write(file->fileptr, buffer, size);
+    }
+  }
+  int ofs = 0;
+  int total_bytes_written = 0;
+  while (size > 0) {
+    unsigned bytes_left_on_this_page = PGSIZE - pg_ofs(buffer);
+    unsigned bytes_to_write_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
+    struct page *p = page_for_addr(buffer, esp);
+    if (!p) {
+        //printf("page_for addr said noooo\n");
+      if (fd!=0) {
+        lock_release(&file_lock);
+      }
+      thread_exit();
+    }
+    if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
+    if (bytes_to_write_this_pass > 0) {
+      page_lock(buffer, true, esp);
+      if (fd == 1) {
+        int save_btr = bytes_to_write_this_pass;
+        void* save_bfr = buffer;
+        while (save_btr > 0) {
+          int write_amt = save_btr > 300 ? 300 : save_btr;
+          putbuf(save_bfr, write_amt);
+          save_bfr += write_amt;
+          save_btr -= write_amt;
+        }
+      } else {
+        //printf("about to lock page!\n");
+        //printf("locked page!\n");
+        int bytes_writ = file_write_at (file->fileptr, buffer, bytes_to_write_this_pass, ofs);
+        //printf("about to unlock page!\n");
+        //printf("bytes_read: %d\n", bytes_read);
+        if (bytes_writ < 0) {
+          total_bytes_written = -1;
+          page_unlock(buffer);
+          break;
+        }
+        if (bytes_writ < bytes_to_write_this_pass) {
+          total_bytes_written += bytes_writ;
+          page_unlock(buffer);
+          break;
+        }
+      }
+      page_unlock(buffer);
+    }
+    total_bytes_written += bytes_to_write_this_pass;
+    ofs += bytes_to_write_this_pass;
+    buffer += bytes_to_write_this_pass;
+    size -= bytes_to_write_this_pass;
+
+    }
+  if (fd != 1) {
     lock_release(&file_lock);
   }
-  return retval;
+  return total_bytes_written;
 }
 
 static int sys_exit(uint8_t* args_start, void* esp UNUSED) {

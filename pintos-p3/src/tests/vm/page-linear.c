@@ -19,12 +19,22 @@ test_main (void)
   /* Initialize to 0x5a. */
   msg ("initialize");
   memset (buf, 0x5a, sizeof buf);
-
+  /*for (i = 0; i < SIZE; i++){
+    printf("setting byte i=%d at mem location buf[i]=%p, val is %x\n", i, buf+i, buf[i]);
+    buf[i] = 0x5a;
+    printf("firstchecking byte i=%d at mem location buf[i]=%p, val is %x\n", i, buf+i, buf[i]);
+    if (buf[i] != 0x5a){
+      fail ("byte %zu != 0x5a", i);
+    }
+    }*/
   /* Check that it's all 0x5a. */
   msg ("read pass");
-  for (i = 0; i < SIZE; i++)
-    if (buf[i] != 0x5a)
+  for (i = 0; i < SIZE; i++){
+    if (buf[i] != 0x5a){
       fail ("byte %zu != 0x5a", i);
+    }
+  }
+      
 
   /* Encrypt zeros. */
   msg ("read/modify/write pass one");

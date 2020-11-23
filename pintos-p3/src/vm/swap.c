@@ -1,5 +1,6 @@
 #include "swap.h"
 #include <stdio.h>
+#include "debug.h"
 
 /*
 
@@ -27,7 +28,7 @@ swap_init (void)
   swap_device = block_get_role (BLOCK_SWAP);
   if (swap_device == NULL)
     {
-      printf ("no swap device--swap disabled\n");
+      PANIC("no swap device--swap disabled\n");
       swap_bitmap = bitmap_create (0);
     }
   else
@@ -40,15 +41,19 @@ swap_init (void)
 
 /* Swaps in page P, which must have a locked frame
    (and be swapped out). */
-bool
+void
 swap_in (struct page *p)
 {
-  if (lock_held_by_current_thread(&p->frame->lock)
-        && p->page_current_loc == INSWAP)
-  {
+  DEBUG_PRINT(("calling swap_in on page at %p\n", p->uaddr));
+  ASSERT(p);
+  ASSERT(p->frame);
+  ASSERT(p->frame->locked);
+  ASSERT(p->frame->lock.holder == thread_current());
+  ASSERT(p->page_current_loc == INSWAP);
     lock_acquire (&swap_lock);
     uint32_t sector = p->sector;
-    char *c = (char *) p->frame->base;
+    DEBUG_PRINT(("coming from sector %d\n", sector));
+    void *c = p->frame->base;
     int i;
     for (i = 0; i < PAGE_SECTORS; i++) {
       block_read (swap_device, sector * PAGE_SECTORS + i, c);
@@ -56,29 +61,41 @@ swap_in (struct page *p)
     }
     bitmap_reset (swap_bitmap, sector);
     lock_release (&swap_lock);
-    return true;
-  }
-  return false;
+    p->sector = -1;
+    DEBUG_PRINT(("finished calling swap_in on page at %p\n", p->uaddr));
 }
 
 /* Swaps out page P, which must have a locked frame. */
-bool 
+void 
 swap_out (struct page *p) 
 {
-  if (lock_held_by_current_thread(&p->frame->lock))
-  {
+  DEBUG_PRINT(("calling swap_out on page at %p\n", p->uaddr));
+  ASSERT(p);
+  ASSERT(p->frame);
+  ASSERT(p->frame->locked);
+  ASSERT(p->page_current_loc == INFRAME);
+  ASSERT(p->frame->lock.holder == thread_current());
+  //DEBUG_PRINT(("made it thru the asserts... %p\n", p->uaddr));
     lock_acquire (&swap_lock);
-    char *c = (char *) p->frame->base;
+    void *c = p->frame->base;
+    //DEBUG_PRINT(("<1>\n"));
+    //DEBUG_PRINT(("c: %p\n", c));
+    //DEBUG_PRINT(("bitmap at %p, size is %u\n", &swap_bitmap, bitmap_size(&swap_bitmap)));
     size_t sector_num = bitmap_scan_and_flip (swap_bitmap, 0, 1, false);
+    if (sector_num == BITMAP_ERROR) PANIC("bitmap error\n");
     p->sector = sector_num;
+    DEBUG_PRINT(("going to sector %d\n", sector_num));
+    //DEBUG_PRINT(("<2>\n"));
     int i;
     for (i = 0; i < PAGE_SECTORS; i++) {
+      //DEBUG_PRINT(("<2a>\n"));
       block_write (swap_device, sector_num * PAGE_SECTORS + i, c);
+      //DEBUG_PRINT(("<2b>\n"));
       c += BLOCK_SECTOR_SIZE;
+      //DEBUG_PRINT(("<2c>\n"));
     }
-    lock_release (&swap_lock);
-    return true;
-  }
-  return false;
+    //DEBUG_PRINT(("<3>\n"));
     
+    lock_release (&swap_lock);
+    DEBUG_PRINT(("finished calling swap_out on page at %p\n", p->uaddr));
 }

@@ -123,7 +123,6 @@ main (void)
   timer_calibrate ();
 
   frame_init();
-  swap_init();
 
 #ifdef FILESYS
   /* Initialize file system. */
@@ -132,6 +131,7 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+  swap_init();
   printf ("Boot complete.\n");
   
   /* Run actions specified on kernel command line. */

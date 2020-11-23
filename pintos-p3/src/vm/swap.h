@@ -21,6 +21,6 @@ static struct lock swap_lock;
 #define PAGE_SECTORS (PGSIZE / BLOCK_SECTOR_SIZE)
 
 void swap_init (void);
-bool swap_in (struct page *p);
-bool swap_out (struct page *p);
+void swap_in (struct page *p);
+void swap_out (struct page *p);
 #endif

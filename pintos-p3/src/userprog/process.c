@@ -590,6 +590,7 @@ setup_stack (void **esp, const char *cmdline)
   argc = 0;
   *esp -= sizeof(char*);
   memcpy(*esp, &argc, sizeof (void*));
+  p->page_current_loc= INFRAME;
   frame_unlock(p->frame);
   //printf("aaa??? done setting up stack???\n");
   return success;

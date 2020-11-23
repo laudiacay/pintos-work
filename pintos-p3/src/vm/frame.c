@@ -4,7 +4,15 @@
 #include "threads/loader.h"
 #include <debug.h>
 #include <random.h>
-
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
 /*
 Managing the frame table
 

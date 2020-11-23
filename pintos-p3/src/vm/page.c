@@ -3,6 +3,15 @@
 #include "vm/frame.h"
 #include "threads/vaddr.h"
 #include "debug.h"
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
 
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */

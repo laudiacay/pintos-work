@@ -12,6 +12,16 @@
 #include "vm/page.h"
 #include <stdlib.h>
 
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
+
 static void syscall_handler (struct intr_frame *);
 static void copy_in (void *, const void *, size_t); 
 static int sys_write (uint8_t*, void*);

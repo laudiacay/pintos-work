@@ -17,15 +17,7 @@ void debug_panic (const char *file, int line, const char *function,
                   const char *message, ...) PRINTF_FORMAT (4, 5) NO_RETURN;
 void debug_backtrace (void);
 void debug_backtrace_all (void);
-
-//#define DEBUG
-#ifdef DEBUG
-#include <stdio.h>
-# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
-#else
-# define DEBUG_PRINT(x) do {} while (0)
-#endif
-
+#define DEBUG
 #endif
 
 

@@ -5,6 +5,16 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 

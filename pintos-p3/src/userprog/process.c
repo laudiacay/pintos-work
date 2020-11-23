@@ -22,6 +22,16 @@
 #include "vm/frame.h"
 #include "vm/page.h"
 
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 

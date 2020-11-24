@@ -13,6 +13,9 @@
 #endif
 #endif
 
+// need to initialize this somewhere
+static struct lock page_out_lock;
+
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
 static void
@@ -174,6 +177,7 @@ page_in (void *fault_addr, void* esp)
 bool
 page_out (struct page *p )
 {
+  lock_acquire (&page_out_lock);
   DEBUG_PRINT(("calling page_out on page at %p\n", p->uaddr));
   ASSERT(p->frame);
   ASSERT(p->frame->lock.holder == thread_current());
@@ -187,6 +191,7 @@ page_out (struct page *p )
     swap_out(p);
     p -> page_current_loc = INSWAP;
   }
+  lock_release (&page_out_lock);
   //DEBUG_PRINT(("did we make it thru this much of page_out %p\n", p->uaddr));
   //pagedir_set_page(thread_current()->pagedir, p->uaddr, p->frame->base, p->writable);
   //DEBUG_PRINT(("clearing page %p from the pagetable at frame base ...\n", p->uaddr, p->frame->base));

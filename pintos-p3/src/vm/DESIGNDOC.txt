@@ -152,9 +152,10 @@ free the frame by setting its pointer to page to be NULL, setting
 Q page's pointer to frame to be NULL, and releasing the frame's lock.
 When process P obtains this frame, we set this frame's pointer to page
 to be the P's page that occupies it, set the page's pointer to frame
-to be this frame, and P also acquires the frame's lock. At this point,
-there is still no mapping yet between the frame and the page in P's page
-table. When P tries to access this page and results in a page fault, 
+to be this frame, and P also acquires the frame's lock. We also copy
+data of this page into the frame, and set up a mapping between
+the page and the frame in P's page table. Finally we set the 
+page_current_loc field of this page to be INFRAME.
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
@@ -174,10 +175,14 @@ table. When P tries to access this page and results in a page fault,
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
 
+1.page_out_lock
+
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
+
+
 
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as

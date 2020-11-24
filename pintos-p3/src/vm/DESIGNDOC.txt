@@ -146,7 +146,15 @@ upon success.
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
-
+When we clear the frame that a Q's page occupies, we first clear
+the mapping between the frame and the page in Q's page table, and
+free the frame by setting its pointer to page to be NULL, setting
+Q page's pointer to frame to be NULL, and releasing the frame's lock.
+When process P obtains this frame, we set this frame's pointer to page
+to be the P's page that occupies it, set the page's pointer to frame
+to be this frame, and P also acquires the frame's lock. At this point,
+there is still no mapping yet between the frame and the page in P's page
+table. When P tries to access this page and results in a page fault, 
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into

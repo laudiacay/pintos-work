@@ -13,9 +13,6 @@
 #endif
 #endif
 
-// need to initialize this somewhere
-//static struct lock page_out_lock;
-
 /* Destroys a page, which must be in the current process's
    page table.  Used as a callback for hash_destroy(). */
 static void
@@ -55,40 +52,40 @@ struct page *
 page_for_addr (const void *address, void* esp)
 {
   if (address >= PHYS_BASE){
-    //DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
+    DEBUG_PRINT(("address %p greater than PHYS_BASE at %p\n", address, PHYS_BASE));
     return NULL;
   }
-  //DEBUG_PRINT(("getting page for %p\n", address));
+  DEBUG_PRINT(("getting page for %p\n", address));
   
   struct thread* t = thread_current();
   ASSERT(t->supp_pt_initialized);
   struct page ht_page;
 
   ht_page.uaddr = pg_round_down(address);
-  //DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
+  DEBUG_PRINT(("getting page for rounded %p\n", ht_page.uaddr));
   struct hash_elem *found_page_elem = hash_find(&t->supp_pt, &ht_page.hash_elem);
   if (found_page_elem) {
-    //DEBUG_PRINT(("gotteeem for addr %p\n", address));
+    DEBUG_PRINT(("gotteeem for addr %p\n", address));
     return hash_entry(found_page_elem, struct page, hash_elem);
   }
   if (address > PHYS_BASE - STACK_MAX) {
     if (!esp) {
-      //DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
+      DEBUG_PRINT(("i was not suggested an esp... no new stack frame.\n"));
       return NULL;
     }
-    //DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
+    DEBUG_PRINT(("considering allocating a new stack frame for %p, esp is at %p\n", address, esp));
     if (address >= esp || address == esp - 4 || address == esp - 32) {
-      //DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
+      DEBUG_PRINT(("yeah ok we can do that...\n", address, esp));
       struct page* p = page_allocate(address, false);
       p -> page_current_loc = TOBEZEROED;
       p->writable = true;
     } else {
       
-      //DEBUG_PRINT(("decided not to...\n"));
+      DEBUG_PRINT(("decided not to...\n"));
       return NULL;
     }
   } else {
-    //DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
+      DEBUG_PRINT(("address is smaller than stack_max at %p\n", PHYS_BASE-STACK_MAX));
       return NULL;
   }
 }
@@ -298,6 +295,11 @@ page_lock (const void *addr , bool will_write, void* esp)
   DEBUG_PRINT(("what came out of page_for_addr: %p\n", p));
   if (!p) {
     DEBUG_PRINT(("failed to get page for addr... %p\n", addr));
+    return false;
+  }
+
+  if (will_write && !p->writable) {
+    DEBUG_PRINT(("TRYING TO WRITE N NOT WRITABLE>>>... %p\n", addr));
     return false;
   }
 

@@ -9,7 +9,6 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
-#include "vm/page.h"
 #include <stdlib.h>
 
 #ifndef DEBUG_BULLSHIT
@@ -256,7 +255,9 @@ static int sys_read (uint8_t* args_start, void* esp) {
     }
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_read_this_pass > 0) {
-      page_lock(buffer, true, esp);
+      if (!page_lock(buffer, true, esp)) {
+        thread_exit();
+        }
       if (fd == 0) {
         for (int i = 0; i < bytes_to_read_this_pass; i++) {
           ((char*)buffer)[i] = input_getc();
@@ -320,7 +321,9 @@ static int sys_write (uint8_t* args_start, void* esp) {
     }
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
     if (bytes_to_write_this_pass > 0) {
-      page_lock(buffer, true, esp);
+      if (!page_lock(buffer, false, esp)) {
+        thread_exit();
+        }
       if (fd == 1) {
         int save_btr = bytes_to_write_this_pass;
         void* save_bfr = buffer;

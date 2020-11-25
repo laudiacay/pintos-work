@@ -23,7 +23,6 @@
 #include "threads/pte.h"
 #include "threads/thread.h"
 #ifdef USERPROG
-#include "userprog/process.h"
 #include "userprog/exception.h"
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
@@ -39,6 +38,7 @@
 #endif
 #include "vm/frame.h"
 #include "vm/swap.h"
+#include "userprog/process.h"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -95,7 +95,6 @@ main (void)
   /* Greet user. */
   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
           init_ram_pages * PGSIZE / 1024);
-
   /* Initialize memory system. */
   palloc_init (user_page_limit);
   malloc_init ();
@@ -131,6 +130,7 @@ main (void)
   filesys_init (format_filesys);
 #endif
 
+  lock_init(&file_lock);
   swap_init();
   printf ("Boot complete.\n");
   

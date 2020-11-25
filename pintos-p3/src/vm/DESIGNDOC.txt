@@ -8,9 +8,9 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Claudia Richoux laudecay@uchicago.edu
+Kate Hu katehu@uchicago.edu
+Kate 50%, Claudia 50%
 
 ---- PRELIMINARIES ----
 
@@ -20,6 +20,8 @@ FirstName LastName <email@domain.example>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+
+mostly just a lot of gdb documentation, that was really rough
 
 			PAGE TABLE MANAGEMENT
 			=====================
@@ -43,18 +45,21 @@ static size_t frame_cnt; // frame count
 static struct lock scan_lock; // lock when a process is scanning
                           // the frame table
 
-// supplemental page table entry
+// tracks where the page is right now for do_page_in- init is to catch bugs
+enum page_current_loc{FROMFILE, INFRAME, TOBEZEROED, INSWAP, INIT};
+
+// supp pt entry
 struct page {
 	void *uaddr; // user virtual address of this page
-	struct file *file; // the file where this page's data comes from
-                   // if this page is from a file
-	off_t file_offset; // file offset
-	size_t file_bytes; // file bytes
-  struct frame* frame; // pointer to the frame where this page
-                      // is currently in
-  bool writable; // whether this page is writable
-	struct hash_elem hash_elem; // hash element that goes into the
-                     // supplemental page table
+  enum page_current_loc page_current_loc; // tracks where this page is right now
+	struct file *file; // if FROMFILE, what file (next two fields same
+	off_t file_offset;
+	size_t file_bytes;
+  struct frame* frame; // track current frame it's in
+  bool writable; // writable
+  struct thread* owner; // who owns it?
+	struct hash_elem hash_elem; // supp_pt pagetable hash element
+	uint32_t sector; // sector index for swap page
 };
 
 struct thread {
@@ -62,6 +67,15 @@ struct thread {
   bool supp_pt_initialized; // tracks whether the supp PT has been
                            // initialized
 };
+
+/* The swap device. */
+static struct block *swap_device;
+
+/* Used swap pages. */
+static struct bitmap *swap_bitmap;
+
+/* Protects swap_bitmap. */
+static struct lock swap_lock;
 
 ---- ALGORITHMS ----
 
@@ -84,7 +98,10 @@ also add a mapping between them in the page table.
 >> alternatively how do you avoid the issue?
 
 We didn't implement dirty and accessed bits since we didn't use
-CLOCK algorithm for eviction.
+CLOCK algorithm for eviction. We avoided the issue by just evicting a
+random page when we needed to evict something.
+If we had needed this in order to pass the tests, i guess we would have stored them in the supp_pt
+and managed them whenever we locked a page for writing or reading?
 
 ---- SYNCHRONIZATION ----
 
@@ -106,7 +123,7 @@ in the frame table entry that points to the page thats in it. Also both
 the frame entry and page entry have a field that stores their own
 physical/virtual address. This way we can find out quickly which frame
 a given page is currently in, and which page a given frame currently
-contains. It's efficient to look up a virtual to physical mapping.
+contains. It's efficient to look up a virtual to physical mapping- we use a hashtable with amortized o(1) accesses.
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -138,9 +155,9 @@ static struct lock swap_lock; // Protects swap_bitmap.
 
 We generate a random frame count and evict the frame with that
 frame count in the frame table. We put this in a while loop that
-always evaluates to true so that if we fail to evict we will try
-to pick another random frame to evict. We return the evicted frame
-upon success.
+always evaluates to true so that if we fail to evict we will keep trying
+to pick another random frame to evict. It's more or less a spin lock :| but shouldn't spin for long
+We return the evicted frame upon success.
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
@@ -157,9 +174,18 @@ data of this page into the frame, and set up a mapping between
 the page and the frame in P's page table. Finally we set the 
 page_current_loc field of this page to be INFRAME.
 
+when we do both of these things, we also do pagedir_set_page/pagedir_clear_page in each process.
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+
+if it's above phys_base, we don't extend. if it's above the stack_max, we don't extend.
+sometimes we pass in ESP as a heuristic (depends on what's calling this and if that makes sense)
+if ESP wasn't passed and the stack would be extended, no new stack frame.
+if ESP was passed and the stack needs to be extended, only extend the stack if the address is 4 or 32 bytes above (push and pusha). otherwise don't extend it. this should break after one more instruction after trying to access memory in ESP+4 or ESP+32, if the instruction wasn't actually push/pusha, and you try to extend the stack again.
+
+so at worst, you can grow the stack incorrectly by either 4 or 32 bytes once without moving ESP properly, and then things break.
 
 
 
@@ -170,25 +196,29 @@ page_current_loc field of this page to be INFRAME.
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+we just stick a lock on each frame and make a lot of assertions to make sure that anywhere we are changing a page, the current thread has a lock on any frames it might be messing with. we also make sure there are no nested lock_acquire (there is one spot with a lock_try_acquire inside a lock_acquire) so deadlock is actually impossible :D.
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
 
-1.page_out_lock
+we have a lock on the frames, and we make sure P doesn't relinquish that lock until P loads its page in. so Q can access its own page until we call pagedir_clear_page in P. if it tries after that, it'll have to fault it back in, but it won't be able to fault the page into P's frame until P no longer holds the lock when P's done faulting in. and it also won't even be able to find its frame, because Qpage->frame gets cleared in swap_out, which happens before pagedir_clear_page (but Qpage's data will be totally fine until that gets run).
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
-
+said lock on frames, Q cannot get the lock on that frame while P is working on it. P won't relinquish its lock on that frame until it's done processing the pagefault.
 
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+we call page_lock to make sure that the page is glued into physical memory and no other process can touch its frame during syscalls. accesses to invalid virtual addresses are handled by the paging code refusing to give us a page to lock into memory.
 
 ---- RATIONALE ----
 
@@ -198,6 +228,8 @@ page_current_loc field of this page to be INFRAME.
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+we use one lock per frame plus a lock for scanning the pagetable to find things to move in and out, plus doing some of the moving around references for paging things out. no frame should ever need to belong to multiple processes unless its being evicted (so that's why the swap lock is necessary) and the per-frame lock makes sure things don't get faulted out from under a syscall using them or their data getting loaded into memory during a pagefault.
 
 			 MEMORY MAPPED FILES
 			 ===================
@@ -247,5 +279,7 @@ the quarter.
 
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
+
+we should be told much more emphatically to get good at GDB. i am so mad at myself for not bothering to until just now (i used radare2 static analysis and a sheet of paper back in first year for bomb lab....). gdb is so nice.... it made this so much easier...
 
 >> Any other comments?

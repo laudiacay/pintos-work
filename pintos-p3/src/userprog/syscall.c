@@ -43,7 +43,6 @@ void check_ptr(const void *ptr);
 void check_str (const void* str);
 struct file_in_thread* get_file(int fd);
 
-bool lock_initialized = false;
 
 struct file_in_thread {
   struct file* fileptr;
@@ -107,10 +106,6 @@ static void
 syscall_handler (struct intr_frame *f)
 {
   // printf("in syscall_handler, esp = %p\n", f->esp);
-  if (!lock_initialized) {
-    lock_init(&file_lock);
-    lock_initialized = true;
-  }
 
   unsigned call_nr = 0;
   static int(*syscall)(uint8_t *, void*);
@@ -247,14 +242,6 @@ static int sys_read (uint8_t* args_start, void* esp) {
   struct file_in_thread* file;
   DEBUG_PRINT(("in sys_read******, goal buffer is %p?\n", buffer));
   int retval = 0;
-  if (fd != 0) {
-    lock_acquire(&file_lock);
-    file = get_file(fd);
-    if (!file) {
-      lock_release(&file_lock);
-      return -1;
-    }
-  }
   int ofs = 0;
   int total_bytes_read = 0;
   while (size > 0) {
@@ -262,11 +249,8 @@ static int sys_read (uint8_t* args_start, void* esp) {
     unsigned bytes_to_read_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
     //printf("left on this page: %d, to read this pass: %d, total rem.: %d\n", bytes_left_on_this_page, bytes_to_read_this_pass, size);
     struct page *p = page_for_addr(buffer, esp);
-    if (!p || !p->writable) {
+    if (!p) {
       //printf("page_for addr said noooo\n");
-      if (fd!=0) {
-        lock_release(&file_lock);
-      }
       //thread_current()->exitstatus = -1;
       thread_exit();
     }
@@ -280,7 +264,15 @@ static int sys_read (uint8_t* args_start, void* esp) {
       } else {
         //printf("about to lock page!\n");
         //printf("locked page!\n");
+        lock_acquire(&file_lock);
+        file = get_file(fd);
+        if (!file) {
+          page_unlock(buffer);
+          lock_release(&file_lock);
+          return -1;
+        }
         int bytes_read = file_read_at (file->fileptr, buffer, bytes_to_read_this_pass, ofs);
+        lock_release(&file_lock);
         //printf("about to unlock page!\n");
         //printf("bytes_read: %d\n", bytes_read);
         if (bytes_read < 0) {
@@ -301,9 +293,6 @@ static int sys_read (uint8_t* args_start, void* esp) {
     buffer += bytes_to_read_this_pass;
     size -= bytes_to_read_this_pass;
   }
-  if (fd != 0) {
-    lock_release(&file_lock);
-  }
   return total_bytes_read;
 }
 
@@ -319,25 +308,14 @@ static int sys_write (uint8_t* args_start, void* esp) {
   struct file_in_thread* file;
   DEBUG_PRINT(("in sys_write******, from buffer file is %p?\n", buffer));
   int retval = 0;
-  if (fd != 1) {
-    lock_acquire(&file_lock);
-    file = get_file(fd);
-    if (!file) {
-      lock_release(&file_lock);
-      return -1;
-    }
-  }
   int ofs = 0;
   int total_bytes_written = 0;
   while (size > 0) {
     unsigned bytes_left_on_this_page = PGSIZE - pg_ofs(buffer);
     unsigned bytes_to_write_this_pass = bytes_left_on_this_page > size ? size : bytes_left_on_this_page;
     struct page *p = page_for_addr(buffer, esp);
-    if (!p) {
+    if (!p || !p->writable) {
         //printf("page_for addr said noooo\n");
-      if (fd!=0) {
-        lock_release(&file_lock);
-      }
       thread_exit();
     }
     if (p->page_current_loc == INIT) p->page_current_loc = TOBEZEROED;
@@ -355,7 +333,15 @@ static int sys_write (uint8_t* args_start, void* esp) {
       } else {
         //printf("about to lock page!\n");
         //printf("locked page!\n");
+        lock_acquire(&file_lock);
+        file = get_file(fd);
+        if (!file) {
+          lock_release(&file_lock);
+          page_unlock(buffer);
+          return -1;
+        }
         int bytes_writ = file_write_at (file->fileptr, buffer, bytes_to_write_this_pass, ofs);
+        lock_release(&file_lock);
         //printf("about to unlock page!\n");
         //printf("bytes_read: %d\n", bytes_read);
         if (bytes_writ < 0) {
@@ -377,9 +363,6 @@ static int sys_write (uint8_t* args_start, void* esp) {
     size -= bytes_to_write_this_pass;
 
     }
-  if (fd != 1) {
-    lock_release(&file_lock);
-  }
   return total_bytes_written;
 }
 
@@ -401,12 +384,14 @@ static int sys_open(uint8_t* args_start, void* esp UNUSED) {
   DEBUG_PRINT(("in sys_open***\n"));
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
-
-  check_ptr(file_name);
-  check_str(file_name);
+  char* kernel_page = copy_in_string (file_name);
+  
+  //check_ptr(file_name);
+  //check_str(file_name);
 
   lock_acquire(&file_lock);
-  struct file *file = filesys_open ((const char *)file_name);
+  struct file *file = filesys_open ((const char *)kernel_page);
+  palloc_free_page(kernel_page);
   if (file == NULL) {
     lock_release(&file_lock);
     return -1;
@@ -417,6 +402,7 @@ static int sys_open(uint8_t* args_start, void* esp UNUSED) {
   thread_current()->fd++;
   list_push_back(&thread_current()->file_list, &new_file->file_elem);
   lock_release(&file_lock);
+  DEBUG_PRINT(("about to finish sys_open...\n"));
   return new_file->fd;
 }
 
@@ -542,6 +528,7 @@ static char *
 copy_in_string (const char *us)
 {
   char *ks;
+  DEBUG_PRINT(("in copy_in_string\n"));
 
   ks = palloc_get_page (0);
   //printf("*****pallocing a page for a string at %p.\n", (void*) ks);
@@ -549,6 +536,7 @@ copy_in_string (const char *us)
     thread_exit ();
 
   int i = 0;
+  bool string_done = false;
   while (i < PGSIZE) {
     void* current_page = pg_round_down(us + i);
 
@@ -558,21 +546,24 @@ copy_in_string (const char *us)
       thread_exit();
     }
     for (;us + i < current_page + PGSIZE && i < PGSIZE; i++) {
-      //DEBUG_PRINT(("in loop in copy_in_string. us+i at %p, contents are %c\n", us + i, *(us+i)));
+      DEBUG_PRINT(("in loop in copy_in_string. us+i at %p, contents are %c\n", us + i, *(us+i)));
       //*(ks + i) = *(us + i);
       if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) {
         page_unlock(current_page);
         palloc_free_page(ks);
         thread_exit();
       }
-      //printf("just copied into ks + i, %c, %d\n", *(ks+i), *(ks+i));
-      if (*(ks + i) == '\x00') break;
+      DEBUG_PRINT(("just copied into ks + i at %p, %c, %d\n", ks + i, *(ks+i), *(ks+i)));
+      if (*(ks + i) == '\x00') {
+        string_done = true;
+        break;
+      }
     }
     page_unlock(current_page);
     //printf("ks + i, %c\n", *(ks+i));
-    if (*(ks + i) == '\x00') break;
+    if (string_done) break;
   }
-  //printf("ks is %s\n", ks);
+  DEBUG_PRINT(("ks is %s\n", ks));
   return ks;
 
   // TODO: don't forget to call palloc_free_page(..) when you're done

@@ -28,6 +28,7 @@ filesys_init (bool format)
     do_format ();
 
   free_map_open ();
+  lock_init(&file_lock);
 }
 
 /* Shuts down the file system module, writing any unwritten data

@@ -72,10 +72,10 @@ frame_alloc_and_lock (struct page *page)
 {
   DEBUG_PRINT(("frame_alloc_and_lock time... for page at %p\n", page->uaddr));
   ASSERT(!page->frame);
-  DEBUG_PRINT(("hmm\n"));
+  //DEBUG_PRINT(("hmm\n"));
   lock_acquire(&scan_lock);
   ASSERT(!page->frame);
-  DEBUG_PRINT(("mmhmm\n"));
+  //DEBUG_PRINT(("mmhmm\n"));
   for (int i = 0; i < frame_cnt; i++) {
     struct frame *f = &frames[i];
     //printf("about to try and lock frame at %p\n", f->base);
@@ -154,7 +154,7 @@ frame_free (struct frame *f) {
   ASSERT(f);
   ASSERT((f->lock).holder == thread_current());
   ASSERT(f->page);
-  DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
+  //DEBUG_PRINT(("freeing frame %p from page %p\n", f->page->uaddr, f->base));
   struct page* p = f -> page;
   f->page = NULL;
   p -> frame = NULL;

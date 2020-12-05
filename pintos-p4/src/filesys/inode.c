@@ -103,6 +103,11 @@ inode_create (block_sector_t sector, off_t length, enum inode_type type)
     disk_inode->length = length;
     disk_inode->magic = INODE_MAGIC;
     disk_inode->type = type;
+    // -1 means the block is unallocated
+    int i;
+    for (i = 0; i < SECTOR_CNT; i++) {
+      disk_inode->sectors[i] = -1;
+    }
 
     block_write (fs_device, sector, disk_inode);
 
@@ -264,6 +269,84 @@ inode_remove (struct inode *inode)
 {
   ASSERT (inode != NULL);
   inode->removed = true;
+}
+
+/* Translates SECTOR_IDX into a sequence of block indexes in
+   OFFSETS and sets *OFFSET_CNT to the number of offsets.
+   offset_cnt can be 1 to 3 depending on whether sector_idx
+   points to sectors within DIRECT, INDIRECT, or DBL_INDIRECT ranges.
+*/
+static void
+calculate_indices (off_t sector_idx, size_t offsets[], size_t *offset_cnt)
+{
+  if (sector_idx < DIRECT_CNT) {
+    offsets[0] = sector_idx;
+    *offset_cnt = 1;
+  }
+  else if (sector_idx >= DIRECT_CNT && sector_idx < DIRECT_CNT+INDIRECT_CNT) {
+    offsets[0] = DIRECT_CNT;
+    offsets[1] = sector_idx - DIRECT_CNT;
+    *offset_cnt = 2;
+  }
+  else {
+    offsets[0] = DIRECT_CNT + INDIRECT_CNT;
+    offsets[1] = (sector_idx-DIRECT_CNT-INDIRECT_CNT*PTRS_PER_SECTOR)/PTRS_PER_SECTOR;
+    offsets[2] = sector_idx-(DIRECT_CNT+INDIRECT_CNT*PTRS_PER_SECTOR+PTRS_PER_SECTOR*offsets[1]);
+    *offset_cnt = 3;
+  }
+}
+
+/* Retrieves the data block for the given byte OFFSET in INODE,
+   setting *DATA_BLOCK to the block and data_sector to the sector to write
+   (for inode_write_at method).
+   Returns true if successful, false on failure.
+   If ALLOCATE is false (usually for inode read), then missing blocks
+   will be successful with *DATA_BLOCK set to a null pointer.
+   If ALLOCATE is true (for inode write), then missing blocks will be allocated.
+   This method may be called in parallel */
+static bool
+get_data_block (struct inode *inode, off_t offset, bool allocate,
+                void **data_block, block_sector_t *data_sector)
+{
+  size_t offsets[3];
+  size_t offset_cnt;
+  calculate_indices (offset, offsets, &offset_cnt);
+  /* direct block */
+  if (offset_cnt == 1) {
+    block_sector_t block_number = inode->data.sectors[offsets[0]];
+    *data_sector = block_number;
+    // the block is allocated so we just get it
+    if (block_number != -1) {
+      block_read (fs_device, block_number, *data_block);
+      return true;
+    }
+    // the block is not allocated so we handle it depending on
+    // the value of ALLOCATE
+    else {
+      if (allocate) {
+        if (!free_map_allocate (1, data_sector)) {
+          return false;
+        }
+        inode->data.sectors[offsets[0]] = *data_sector;
+        block_read (fs_device, *data_sector, *data_block);
+        return true;
+      }
+      else {
+        *data_block = NULL;
+        return true;
+      }
+    }
+  }
+  /* indirect block */
+  else if (offset_cnt == 2) {
+
+  }
+  /* doubly indirect block */
+  else {
+
+  }
+
+   return true;
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.

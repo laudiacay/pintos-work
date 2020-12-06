@@ -10,7 +10,7 @@
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 
-#define DIRECT_CNT 123
+#define DIRECT_CNT 122
 #define INDIRECT_CNT 1
 #define DBL_INDIRECT_CNT 1
 #define SECTOR_CNT (DIRECT_CNT + INDIRECT_CNT + DBL_INDIRECT_CNT)
@@ -28,7 +28,7 @@ struct inode_disk
     block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[125];               /* Not used. */
+    //uint32_t unused[125];               /* Not used. */
 
     block_sector_t sectors[SECTOR_CNT];
     enum inode_type type;

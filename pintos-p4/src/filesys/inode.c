@@ -34,6 +34,16 @@ struct inode_disk
     enum inode_type type;
   };
 
+struct indirect_block_sector
+{
+  block_sector_t blocks[PTRS_PER_SECTOR];
+};
+
+bool data_block_allocate (block_sector_t *, off_t, void **, block_sector_t *, bool);
+bool indirect_block_allocate (block_sector_t *, off_t, struct indirect_block_sector *,
+                              bool);
+
+
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
 static inline size_t
@@ -296,6 +306,55 @@ calculate_indices (off_t sector_idx, size_t offsets[], size_t *offset_cnt)
   }
 }
 
+// allocate a data block, return true if successful
+bool
+data_block_allocate (block_sector_t blocks[], off_t offset, 
+                      void **data_block, block_sector_t *data_sector,
+                      bool allocate)
+{
+  if (blocks[offset] != -1) {
+    *data_sector = blocks[offset];
+    block_read (fs_device, *data_sector, *data_block);
+    return true;
+  }
+  if (allocate) {
+    if (!free_map_allocate (1, data_sector))
+      return false;
+    blocks[offset] = *data_sector;
+    block_read (fs_device, *data_sector, *data_block);
+    return true;
+  }
+  *data_block = NULL;
+  return true;
+}
+
+// allocate an indirect block and init blcok entries to -1
+// return true if successful
+bool
+indirect_block_allocate (block_sector_t blocks[], off_t offset, 
+                          struct indirect_block_sector *indir_block,
+                          bool allocate)
+{
+  if (blocks[offset] != -1) {
+    return true;
+  }
+  if (allocate) {
+    block_sector_t *block_number;
+    if (!free_map_allocate (1, block_number))
+      return false;
+    blocks[offset] = *block_number;
+    indir_block = malloc(sizeof(*indir_block));
+    int i;
+    for (i = 0; i < PTRS_PER_SECTOR; i++) {
+      indir_block->blocks[i] = -1;
+    }
+    ASSERT (sizeof *indir_block == BLOCK_SECTOR_SIZE);
+    block_write (fs_device, *block_number, indir_block);
+    return true;
+  }
+  return true;
+}
+
 /* Retrieves the data block for the given byte OFFSET in INODE,
    setting *DATA_BLOCK to the block and data_sector to the sector to write
    (for inode_write_at method).
@@ -313,40 +372,80 @@ get_data_block (struct inode *inode, off_t offset, bool allocate,
   calculate_indices (offset, offsets, &offset_cnt);
   /* direct block */
   if (offset_cnt == 1) {
-    block_sector_t block_number = inode->data.sectors[offsets[0]];
-    *data_sector = block_number;
-    // the block is allocated so we just get it
-    if (block_number != -1) {
-      block_read (fs_device, block_number, *data_block);
-      return true;
-    }
-    // the block is not allocated so we handle it depending on
-    // the value of ALLOCATE
-    else {
-      if (allocate) {
-        if (!free_map_allocate (1, data_sector)) {
-          return false;
-        }
-        inode->data.sectors[offsets[0]] = *data_sector;
-        block_read (fs_device, *data_sector, *data_block);
-        return true;
-      }
-      else {
-        *data_block = NULL;
-        return true;
-      }
-    }
+    return data_block_allocate (inode->data.sectors, offsets[0], data_block, 
+                          data_sector, allocate);
   }
   /* indirect block */
   else if (offset_cnt == 2) {
-
+    struct indirect_block_sector *indir_block;
+    if (indirect_block_allocate(inode->data.sectors, offsets[0], indir_block,
+                              allocate))
+    {
+      return data_block_allocate (indir_block->blocks, offsets[1], data_block, 
+                          data_sector, allocate);
+    }
   }
   /* doubly indirect block */
-  else {
-
+  else if (offset_cnt == 3){
+    struct indirect_block_sector *doubly_indir_block;
+    if (indirect_block_allocate(inode->data.sectors, offsets[0],
+                                        doubly_indir_block, allocate))
+    {
+      struct indirect_block_sector *indir_block;
+      if (indirect_block_allocate(doubly_indir_block->blocks, offsets[1],
+                                        indir_block, allocate))
+      {
+        return data_block_allocate (indir_block->blocks, offsets[2], data_block, 
+                          data_sector, allocate);
+      }
+    }
   }
 
-   return true;
+  return false;
+}
+
+/* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
+   Returns the number of bytes actually read, which may be less
+   than SIZE if an error occurs or end of file is reached.
+   Some modifications might be needed for this function template. */
+off_t
+inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
+{
+  uint8_t *buffer = buffer_;
+  off_t bytes_read = 0;
+  block_sector_t target_sector = 0; // not really useful for inode_read
+
+  while (size > 0)
+    {
+      /* Sector to read, starting byte offset within sector, sector data. */
+      int sector_ofs = offset % BLOCK_SECTOR_SIZE;
+      void *block; // may need to be allocated in get_data_block method,
+                   // and don't forget to free it in the end
+
+      /* Bytes left in inode, bytes left in sector, lesser of the two. */
+      off_t inode_left = inode_length (inode) - offset;
+      int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
+      int min_left = inode_left < sector_left ? inode_left : sector_left;
+
+      /* Number of bytes to actually copy out of this sector. */
+      int chunk_size = size < min_left ? size : min_left;
+      if (chunk_size <= 0 || !get_data_block (inode, offset, false, &block, &target_sector))
+        break;
+
+      if (block == NULL)
+        memset (buffer + bytes_read, 0, chunk_size);
+      else
+        {
+          memcpy (buffer + bytes_read, block + sector_ofs, chunk_size);
+        }
+
+      /* Advance. */
+      size -= chunk_size;
+      offset += chunk_size;
+      bytes_read += chunk_size;
+    }
+
+  return bytes_read;
 }
 
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.

@@ -31,22 +31,6 @@ struct inode *
 dir_create (block_sector_t sector, block_sector_t parent_sector)
 {
   // ..
-  struct inode *inode = inode_create(sector, 0, DIR);
-  struct dir_entry d;
-
-  d.inode_sector = sector;
-  strlcpy(d.name, ".", NAME_MAX+1);
-  d.in_use = true;
-
-  inode_write_at(inode, (const void*) &d, sizeof(d), 0);
-
-  d.inode_sector = parent_sector;
-  strlcpy(d.name, "..", NAME_MAX+1);
-  d.in_use = true;
-
-  inode_write_at(inode, (const void*) &d, sizeof(d), sizeof(d));
-
-  return inode;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -55,7 +39,7 @@ struct dir *
 dir_open (struct inode *inode)
 {
   struct dir *dir = calloc (1, sizeof *dir);
-  if (inode != NULL && dir != NULL && inode_get_type (inode) == DIR)
+  if (inode != NULL && dir != NULL && inode_get_type (inode) == DIR_INODE)
     {
       dir->inode = inode;
       dir->pos = 0;
@@ -89,7 +73,8 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir)
 {
-  if (dir != NULL) {
+  if (dir != NULL)
+    {
       inode_close (dir->inode);
       free (dir);
     }
@@ -225,11 +210,8 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
-
   /* Verify that it is not an in-use or non-empty directory. */
   // ....
-  // FIXME
-  goto done;
   // ....
   // ....
 
@@ -260,7 +242,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e)
     {
       dir->pos += sizeof e;
-      // TODO FIXME THIS IS JUST SO THINGS COMPILE
+      // TODO FIX ME
       if (false)
       //if (e.in_use && /* .....??? ..... */)
         {

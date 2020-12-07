@@ -104,6 +104,7 @@ struct thread
     struct semaphore load_semaphore;
     int loaded; // 0 = not loaded, -1 = fail, 1 = loaded
     int fd;
+    int wd;
     struct list file_list;
     int exit_flag;
 

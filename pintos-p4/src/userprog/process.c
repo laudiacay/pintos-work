@@ -290,7 +290,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_name_copy, file_name, 60);
   char* save_ptr;
   char* file_name_real = strtok_r ( file_name_copy, " ", &save_ptr);
-  t->exe_file = file = filesys_open (file_name_real);
+  t->exe_file = file = file_open(filesys_open (file_name_real));
 
   if (file == NULL) 
     {

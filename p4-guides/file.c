@@ -1,17 +1,8 @@
 #include "filesys/file.h"
 #include <debug.h>
+#include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
-#ifndef DEBUG_BULLSHIT
-#define DEBUG_BULLSHIT
-#ifdef DEBUG
-#include <stdio.h>
-# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
-#else
-# define DEBUG_PRINT(x) do {} while (0)
-#endif
-#endif
 
 /* An open file. */
 struct file 
@@ -21,17 +12,17 @@ struct file
     bool deny_write;            /* Has file_deny_write() been called? */
   };
 
-struct inode *file_create (block_sector_t sector, off_t length) {
+/* Creates a file in the given SECTOR,
+   initially LENGTH bytes long. 
+   Returns inode for the file on success, null pointer on failure.
+   On failure, SECTOR is released in the free map. */
+struct inode *
+file_create (block_sector_t sector, off_t length) 
+{
   // ....
-  struct inode* inode = inode_create (sector, length, FILE);
-  // making sure i can write at every page in the file....?
-  // FIXME>???
-  //unsigned n_pages = length / BLOCK_SIZE
-  //for (off_t i = 0; off_t <= )
-  
-  //if (length != inode_write_at (inode, )
+  // inode_create (sector, FILE_INODE);
+  // inode_write_at (...)
   // ....
-  return inode;
 }
 
 /* Opens a file for the given INODE, of which it takes ownership,
@@ -41,7 +32,7 @@ struct file *
 file_open (struct inode *inode) 
 {
   struct file *file = calloc (1, sizeof *file);
-  if (inode != NULL && file != NULL)
+  if (inode != NULL && file != NULL && inode_get_type (inode) == FILE_INODE)
     {
       file->inode = inode;
       file->pos = 0;

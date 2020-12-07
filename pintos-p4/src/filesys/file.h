@@ -3,11 +3,13 @@
 
 #include "filesys/off_t.h"
 #include "threads/synch.h"
+#include "devices/block.h"
 
 struct lock file_lock;
 struct inode;
 
 /* Opening and closing files. */
+struct inode *file_create (block_sector_t sector, off_t length);
 struct file *file_open (struct inode *);
 struct file *file_reopen (struct file *);
 void file_close (struct file *);

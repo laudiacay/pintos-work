@@ -1,7 +1,10 @@
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -9,6 +12,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "threads/synch.h"
+#include "devices/input.h"
 #include <stdlib.h>
 
 static void syscall_handler (struct intr_frame *);
@@ -76,9 +80,8 @@ check_ptr(const void *ptr) {
 
 void
 check_buffer(const void *buffer, unsigned size) {
-  int i;
   char *temp = (char*)buffer;
-  for (i=0; i<size; i++) {
+  for (unsigned i=0; i<size; i++) {
     check_ptr((const void*)temp);
     temp++;
   }
@@ -106,9 +109,11 @@ syscall_handler (struct intr_frame *f)
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
   //printf("made it?\n");
   switch (call_nr) {
-  case SYS_WRITE: syscall = sys_write;
+  case SYS_WRITE:
+    syscall = sys_write;
     break;
-  case SYS_EXIT: syscall = sys_exit;
+  case SYS_EXIT:
+    syscall = sys_exit;
     break;
   case SYS_HALT: syscall = sys_halt;
     break;
@@ -143,7 +148,7 @@ syscall_handler (struct intr_frame *f)
   else f->eax = -1;
 }
 
-static void sys_halt (uint8_t* args_start) {
+static void sys_halt (uint8_t* args_start UNUSED) {
   shutdown_power_off();
 }
 
@@ -192,7 +197,7 @@ static bool sys_create (uint8_t* args_start) {
   check_str(file_name);
 
   lock_acquire(&file_lock);
-  bool status = filesys_create(file_name, size);
+  bool status = filesys_create(file_name, size, FILE);
   lock_release(&file_lock);
   return status;
 }
@@ -212,7 +217,7 @@ static int sys_read (uint8_t* args_start) {
   // if (args_start == NULL)
   //   return -1;
   int fd;
-  const void* buffer;
+  void* buffer;
   unsigned size;
   copy_in (&fd, args_start, sizeof(int));
   copy_in (&buffer, args_start + sizeof(int), sizeof(int));
@@ -220,7 +225,7 @@ static int sys_read (uint8_t* args_start) {
   check_buffer(buffer, size);
   int retval = 0;
   if (fd == 0) {
-    int i;
+    unsigned i;
     uint8_t *store = (uint8_t *)buffer;
     for (i = 0;i < size; i++) {
       store[i] = input_getc();
@@ -295,7 +300,7 @@ static int sys_open(uint8_t* args_start) {
   check_str(file_name);
 
   lock_acquire(&file_lock);
-  struct file *file = filesys_open ((const char *)file_name);
+  struct file *file = file_open(filesys_open ((const char *)file_name));
   if (file == NULL) {
     lock_release(&file_lock);
     return -1;

@@ -4,18 +4,18 @@
 #include <stdbool.h>
 #include "filesys/off_t.h"
 #include "devices/block.h"
-#include "threads/synch.h"
 
 struct bitmap;
 
+/* Type of an inode. */
 enum inode_type
-{
-	FILE,         /* Ordinary file. */
-	DIR           /* Directory. */
-};
+  {
+    FILE_INODE,         /* Ordinary file. */
+    DIR_INODE           /* Directory. */
+  };
 
 void inode_init (void);
-struct inode *inode_create (block_sector_t, off_t, enum inode_type);
+struct inode *inode_create (block_sector_t, enum inode_type);
 struct inode *inode_open (block_sector_t);
 struct inode *inode_reopen (struct inode *);
 enum inode_type inode_get_type (const struct inode *);
@@ -30,8 +30,5 @@ off_t inode_length (const struct inode *);
 int inode_open_cnt (const struct inode *);
 void inode_lock (struct inode *);
 void inode_unlock (struct inode *);
-//static void calculate_indices (off_t, size_t *, size_t *);
-//static bool get_data_block (struct inode *, off_t, bool,
-//                void **, block_sector_t *);
 
 #endif /* filesys/inode.h */

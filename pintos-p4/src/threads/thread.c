@@ -1,4 +1,5 @@
 #include "threads/thread.h"
+#include "threads/malloc.h"
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
@@ -200,6 +201,7 @@ thread_create (const char *name, int priority,
 
   // add this thread to kernel thread's children list
   struct thread *kernel_t = thread_current();
+  t->wd = kernel_t->wd;
   t->parent = kernel_t->tid;
   struct child_wrapper *childwp = malloc(sizeof(struct child_wrapper));
   childwp->realchild = t;
@@ -493,7 +495,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->exit_flag = 0;
   t->wrapper = NULL;
   t->exitstatus = -1;
-  
+  t->wd = 1;
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);

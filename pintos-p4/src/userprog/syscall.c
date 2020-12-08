@@ -408,6 +408,8 @@ static void sys_close (uint8_t* args_start) {
     return;
   }
   file_close(file->fileptr);
+  if (file->dirptr != NULL)
+    dir_close(file->dirptr);
   list_remove(&file->file_elem);
   free(file);
   lock_release(&file_lock);

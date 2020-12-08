@@ -133,18 +133,10 @@ inode_create (block_sector_t sector, off_t length, enum inode_type type)
     }
 
     block_write (fs_device, sector, disk_inode);
-
-    struct inode *mem_inode = malloc(sizeof(struct inode));
+    
+    struct inode *mem_inode = inode_open(sector);
     if (mem_inode != NULL)
     {
-      mem_inode->sector = sector;
-      mem_inode->open_cnt = 0;
-      mem_inode->removed = false;
-      mem_inode->deny_write_cnt = 0;
-      lock_init(&(mem_inode->deny_write_lock));
-      lock_init(&(mem_inode->lock));
-      cond_init(&(mem_inode->no_writers_cond));
-      free (disk_inode);
       return mem_inode;
     }
   }
@@ -169,8 +161,8 @@ inode_open (block_sector_t sector)
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector) 
         {
-          inode_reopen (inode);
           lock_release(&open_inodes_lock);
+          inode_reopen (inode);
           return inode;
         }
     }
@@ -186,6 +178,7 @@ inode_open (block_sector_t sector)
   inode->sector = sector;
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
+  inode->writer_cnt = 0;
   inode->removed = false;
   lock_init(&(inode->deny_write_lock));
   lock_init(&(inode->lock));
@@ -239,6 +232,8 @@ inode_close (struct inode *inode)
   if (inode == NULL)
     return;
 
+  lock_acquire (&open_inodes_lock);
+
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
@@ -254,6 +249,7 @@ inode_close (struct inode *inode)
 
       free (inode); 
     }
+  lock_release (&open_inodes_lock);
 }
 
 /* Deallocates SECTOR and anything it points to recursively.
@@ -264,13 +260,11 @@ static void
 deallocate_recursive (block_sector_t sector, int level)
 {
 
-  // TODO CHECK ME
   if (level == 0) {
     free_map_release (sector);
     return;
   }
   else {
-    // get direct/indirect blocks that should be deallocated
     block_sector_t blocks[PTRS_PER_SECTOR]; 
     block_read (fs_device, sector, blocks);
     // deallocate those blocks
@@ -287,23 +281,22 @@ deallocate_recursive (block_sector_t sector, int level)
 static void
 deallocate_inode (const struct inode *inode)
 {
-
-  // TODO CHECK ME
+  DEBUG_PRINT(("DEALLOCATE_INODE %p", inode));
+  struct inode_disk from_disk;
+  block_read (fs_device, inode->sector, &from_disk);
   int i;
   for (i = 0; i < SECTOR_CNT; i++) {
     if (i >= 0 && i < DIRECT_CNT) {
-      PANIC("TODO\n");
-      //deallocate_recursive (inode->data.sectors[i], 0);
+      deallocate_recursive (from_disk.sectors[i], 0);
     }
     else if (i >= DIRECT_CNT && i < DIRECT_CNT+INDIRECT_CNT) {
-      PANIC("TODO\n");
-      //deallocate_recursive (inode->data.sectors[i], 1);
+      deallocate_recursive (from_disk.sectors[i], 1);
     }
     else {
-      PANIC("TODO\n");
-      //deallocate_recursive (inode->data.sectors[i], 2);
+      deallocate_recursive (from_disk.sectors[i], 2);
     }
   }
+  DEBUG_PRINT(("DONE DEALLOCATE_INODE %p", inode));
 }
 
 /* Marks INODE to be deleted when it is closed by the last caller who
@@ -339,6 +332,7 @@ calculate_indices (off_t sector_idx, size_t offsets[], size_t *offset_cnt)
     offsets[2] = sector_idx-(DIRECT_CNT+INDIRECT_CNT*PTRS_PER_SECTOR+PTRS_PER_SECTOR*offsets[1]);
     *offset_cnt = 3;
   }
+  DEBUG_PRINT(("IN CALC INDICES! sector_idx: %d, offset_cnt: %d, off0: %d, off1: %d, off2: %d\n", sector_idx, *offset_cnt, offsets[0], offsets[1], offsets[2]));
 }
 
 void
@@ -366,7 +360,7 @@ get_data_block (struct inode *inode, off_t offset, bool allocate,
   // TODO CHECK ME
   size_t offsets[3];
   size_t offset_cnt;
-  calculate_indices (offset, offsets, &offset_cnt);
+  calculate_indices (offset/BLOCK_SECTOR_SIZE, offsets, &offset_cnt);
 
   block_sector_t current_sector = inode->sector;
   block_sector_t next_sector;
@@ -381,32 +375,32 @@ get_data_block (struct inode *inode, off_t offset, bool allocate,
     if (next_sector == 0) {
       // DEBUG_PRINT(("next sector allocating\n"));
       if (!allocate) {
-        DEBUG_PRINT(("jk not allocate mode :(\n"));
+        //DEBUG_PRINT(("jk not allocate mode :(\n"));
         *data_block = NULL;
         free(block_data);
         return true;
       } else {
         if (!free_map_allocate(&next_sector)) {
-          DEBUG_PRINT(("failed to allocate in freemap:(\n"));
+          //DEBUG_PRINT(("failed to allocate in freemap:(\n"));
           *data_block = NULL;
           free(block_data);
           return false;
         }
         // update block_data block
-        DEBUG_PRINT(("new next sector allocated! %u:(\n", next_sector));
+        //DEBUG_PRINT(("new next sector allocated! %u:(\n", next_sector));
         block_data[offsets[i]] = next_sector;
         // write it out to disk
         block_write(fs_device, current_sector, block_data);
-        DEBUG_PRINT(("wrote out edited current sector to disk:(\n"));
+        //DEBUG_PRINT(("wrote out edited current sector to disk:(\n"));
         set_to_zeros(next_sector);
-        DEBUG_PRINT(("zeroed next_sector:(\n"));
+        //DEBUG_PRINT(("zeroed next_sector:(\n"));
       }
     }
     block_read (fs_device, next_sector, (void*) block_data);
-    DEBUG_PRINT(("read in next_sector:(\n"));
+    //DEBUG_PRINT(("read in next_sector:(\n"));
     current_sector = next_sector;
   }
-  DEBUG_PRINT(("we DONE\n"));
+  //DEBUG_PRINT(("we DONE\n"));
   *data_block = block_data;
   *data_sector = current_sector;
   return true;
@@ -518,7 +512,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
 
-  extend_file (inode, offset);
+  extend_file (inode, offset + size);
 
   lock_acquire (&inode->deny_write_lock);
   if (--inode->writer_cnt == 0)

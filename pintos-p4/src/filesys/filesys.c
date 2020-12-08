@@ -151,6 +151,7 @@ resolve_name_to_entry (const char *name,
 static struct inode *
 resolve_name_to_inode (const char *name)
 {
+  DEBUG_PRINT(("RESOLVING NAME TO INODE!\n"));
   if (name[0] == '/' && strlen(name) == 1) {
     return inode_open(1);
   }
@@ -160,10 +161,14 @@ resolve_name_to_inode (const char *name)
     return NULL;
   }
   struct inode* inode = malloc(sizeof(inode));
+
+  DEBUG_PRINT(("ABOUT TO DIR_LOOKUP THE INODE!\n"));
   if (!dir_lookup(dirp, base_name, &inode)) {
+    DEBUG_PRINT(("FAILED TO DIR_LOOKUP THE INODE!\n"));
     dir_close(dirp);
     return NULL;
   }
+  DEBUG_PRINT(("SUCCESSFULLY RESOLVED NAME TO INODE!\n"));
   return inode;
 }
 

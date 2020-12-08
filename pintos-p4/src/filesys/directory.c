@@ -47,13 +47,13 @@ dir_create (block_sector_t sector, block_sector_t parent_sector)
   strlcpy(d.name, ".", NAME_MAX+1);
   d.in_use = true;
 
-  inode_write_at(inode, (const void*) &d, sizeof(d), 0);
+  inode_write_at(inode, (const void*) &d, sizeof(d), 0, true);
 
   d.inode_sector = parent_sector;
   strlcpy(d.name, "..", NAME_MAX+1);
   d.in_use = true;
 
-  inode_write_at(inode, (const void*) &d, sizeof(d), sizeof(d));
+  inode_write_at(inode, (const void*) &d, sizeof(d), sizeof(d), true);
 
   return inode;
 }
@@ -209,7 +209,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
-  success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  success = inode_write_at (dir->inode, &e, sizeof e, ofs, true) == sizeof e;
 
  done:
   inode_unlock (dir->inode);
@@ -253,7 +253,7 @@ dir_remove (struct dir *dir, const char *name)
 
   /* Erase directory entry. */
   e.in_use = false;
-  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e)
+  if (inode_write_at (dir->inode, &e, sizeof e, ofs, true) != sizeof e)
     goto done;
 
   /* Remove inode. */

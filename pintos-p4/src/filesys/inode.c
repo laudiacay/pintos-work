@@ -122,24 +122,24 @@ inode_create (block_sector_t sector, off_t length, enum inode_type type)
 
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
-  {
-    disk_inode->length = length;
-    disk_inode->magic = INODE_MAGIC;
-    disk_inode->type = type;
-    // -1 means the block is unallocated
-    int i;
-    for (i = 0; i < SECTOR_CNT; i++) {
-      disk_inode->sectors[i] = 0;
-    }
-
-    block_write (fs_device, sector, disk_inode);
-    
-    struct inode *mem_inode = inode_open(sector);
-    if (mem_inode != NULL)
     {
-      return mem_inode;
+      disk_inode->length = length;
+      disk_inode->magic = INODE_MAGIC;
+      disk_inode->type = type;
+      // -1 means the block is unallocated
+      int i;
+      for (i = 0; i < SECTOR_CNT; i++) {
+        disk_inode->sectors[i] = 0;
+      }
+
+      block_write (fs_device, sector, disk_inode);
+    
+      struct inode *mem_inode = inode_open(sector);
+      if (mem_inode != NULL)
+        {
+          return mem_inode;
+        }
     }
-  }
   return NULL;
 }
 
@@ -193,11 +193,11 @@ struct inode *
 inode_reopen (struct inode *inode)
 {
   if (inode != NULL)
-  {
-    lock_acquire (&open_inodes_lock);
-    inode->open_cnt++;
-    lock_release (&open_inodes_lock);
-  }
+    {
+      lock_acquire (&open_inodes_lock);
+      inode->open_cnt++;
+      lock_release (&open_inodes_lock);
+    }
   return inode;
 }
 
@@ -242,10 +242,10 @@ inode_close (struct inode *inode)
  
       /* Deallocate blocks if removed. */
       if (inode->removed) 
-      {
-        deallocate_inode (inode);
-        free_map_release (inode->sector);
-      }
+        {
+          deallocate_inode (inode);
+          free_map_release (inode->sector);
+        }
 
       free (inode); 
     }
@@ -471,14 +471,20 @@ extend_file (struct inode *inode, off_t length)
    Some modifications might be needed for this function template.*/
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
-                off_t offset)
+                off_t offset, bool im_allowed_to_write_to_dirs_i_swear)
 {
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   block_sector_t target_sector = 0;
-
   /* Don't write if writes are denied. */
   lock_acquire (&inode->deny_write_lock);
+  struct inode_disk idisk;
+  block_read (fs_device, inode->sector, (void*) &idisk);
+  if ((idisk.type == DIR && !im_allowed_to_write_to_dirs_i_swear)) {
+    
+    lock_release (&inode->deny_write_lock);
+    return -1;
+  }
   if (inode->deny_write_cnt)
     {
       lock_release (&inode->deny_write_lock);

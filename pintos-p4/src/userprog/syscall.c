@@ -299,6 +299,7 @@ static int sys_write (uint8_t* args_start) {
   else {
     lock_acquire(&file_lock);
     struct file_in_thread* file = get_file(fd);
+
     if (file == NULL) {
       lock_release(&file_lock);
       return -1;

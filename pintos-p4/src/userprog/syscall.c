@@ -337,8 +337,17 @@ static int sys_open(uint8_t* args_start) {
     return -1;
   }
   struct file_in_thread *new_file = malloc(sizeof(struct file_in_thread));
-  new_file->fd = thread_current()->fd;
   new_file->fileptr = file;
+
+  // if the file is a directory
+  struct inode *inode = file_get_inode(new_file->fileptr);
+  if(inode != NULL && inode_get_type (inode) == DIR) {
+    new_file->dirptr = dir_open(inode_reopen(inode));
+  }
+  else
+    new_file->dirptr = NULL;
+
+  new_file->fd = thread_current()->fd;
   thread_current()->fd++;
   list_push_back(&thread_current()->file_list, &new_file->file_elem);
   lock_release(&file_lock);
@@ -459,7 +468,6 @@ sys_readdir(uint8_t* args_start)
 
   if (inode_get_type (inode) != DIR) goto done;
 
-  // TODO where is dirptr initialized?
   ASSERT (file_wrapper->dirptr != NULL);
   ret = dir_readdir (file_wrapper->dirptr, name);
 

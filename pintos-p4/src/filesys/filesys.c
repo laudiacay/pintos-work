@@ -234,10 +234,12 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+  struct dir* dirp;
+  char base_name[NAME_MAX + 1];
+  if (!resolve_name_to_entry(name, &dirp, base_name)) return false;
+  bool success = dirp != NULL && dir_remove (dirp, name);
 
+  dir_close (dirp); 
   return success;
 }
 

@@ -243,8 +243,8 @@ inode_close (struct inode *inode)
       /* Deallocate blocks if removed. */
       if (inode->removed) 
       {
-        free_map_release (inode->sector);
         deallocate_inode (inode);
+        free_map_release (inode->sector);
       }
 
       free (inode); 
@@ -259,7 +259,9 @@ inode_close (struct inode *inode)
 static void
 deallocate_recursive (block_sector_t sector, int level)
 {
-
+  if (sector == 0) {
+    return;
+  }
   if (level == 0) {
     free_map_release (sector);
     return;

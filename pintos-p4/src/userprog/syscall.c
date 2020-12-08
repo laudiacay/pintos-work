@@ -31,6 +31,12 @@ static void sys_seek (uint8_t* args_start);
 static unsigned sys_tell (uint8_t* args_start);
 static void sys_close (uint8_t* args_start);
 
+static bool sys_chdir(uint8_t*);
+static bool sys_mkdir(uint8_t*);
+static bool sys_readdir(uint8_t*);
+static bool sys_isdir(uint8_t*);
+static int sys_inumber(uint8_t*);
+
 void check_buffer(const void *buffer, unsigned size);
 void check_ptr(const void *ptr);
 void check_str (const void* str);
@@ -39,7 +45,8 @@ struct file_in_thread* get_file(int fd);
 bool lock_initialized = false;
 
 struct file_in_thread {
-  struct file* fileptr;
+  struct file *fileptr;
+  struct dir *dirptr;
   int fd;
   struct list_elem file_elem;
 };
@@ -136,6 +143,16 @@ syscall_handler (struct intr_frame *f)
   case SYS_TELL: syscall = sys_tell;
     break;
   case SYS_CLOSE: syscall = sys_close;
+    break;
+  case SYS_CHDIR: syscall = sys_chdir;
+    break;
+  case SYS_MKDIR: syscall = sys_mkdir;
+    break;
+  case SYS_READDIR: syscall = sys_readdir;
+    break;
+  case SYS_ISDIR: syscall = sys_isdir;
+    break;
+  case SYS_INUMBER: syscall = sys_inumber;
     break;
   default:
     syscall = NULL;
@@ -371,6 +388,121 @@ static void sys_close (uint8_t* args_start) {
   lock_release(&file_lock);
 }
 
+static bool
+sys_chdir(uint8_t* args_start)
+{
+  char *dir;
+  copy_in (&dir, args_start, sizeof(char*));
+
+  check_ptr(dir);
+  check_str(dir);
+
+  bool ret;
+  lock_acquire (&file_lock);
+  ret = filesys_chdir(dir);
+  lock_release (&file_lock);
+
+  return ret;
+}
+
+static bool
+sys_mkdir(uint8_t* args_start)
+{
+  char *dir;
+  copy_in (&dir, args_start, sizeof(char*));
+
+  check_ptr(dir);
+  check_str(dir);
+
+  bool ret;
+  lock_acquire (&file_lock);
+  ret = filesys_create(dir, 0, DIR);
+  lock_release (&file_lock);
+
+  return ret;
+
+}
+
+static bool
+sys_readdir(uint8_t* args_start)
+{
+  int fd;
+  char *name;
+  copy_in (&fd, args_start, sizeof(int));
+  copy_in (&name, args_start+sizeof(int), sizeof(char*));
+
+  bool ret = false;
+
+  lock_acquire (&file_lock);
+  struct file_in_thread *file_wrapper = get_file(fd);
+  if (file_wrapper == NULL) goto done;
+
+  struct inode *inode = file_get_inode(file_wrapper->fileptr);
+  if(inode == NULL) goto done;
+
+  if (inode_get_type (inode) != DIR) goto done;
+
+  // TODO where is dirptr initialized?
+  ASSERT (file_wrapper->dirptr != NULL);
+  ret = dir_readdir (file_wrapper->dirptr, name);
+
+done:
+  lock_release (&file_lock);
+  return ret;
+}
+
+static bool
+sys_isdir(uint8_t* args_start)
+{
+  int fd;
+  copy_in (&fd, args_start, sizeof(int));
+
+  lock_acquire (&file_lock);
+  struct file_in_thread* file_wrapper = get_file(fd);
+  if (file_wrapper == NULL) {
+    lock_release (&file_lock);
+    return false;
+  }
+  struct inode *inode = file_get_inode(file_wrapper->fileptr);
+  if (inode == NULL) {
+    lock_release (&file_lock);
+    return false;
+  }
+  
+  bool ret;
+  if (inode_get_type (inode) == DIR)
+    ret = true;
+  else
+    ret = false;
+  lock_release (&file_lock);
+
+  return ret;
+
+}
+
+static int
+sys_inumber(uint8_t* args_start)
+{
+  int fd;
+  copy_in (&fd, args_start, sizeof(int));
+
+  lock_acquire (&file_lock);
+  struct file_in_thread* file_wrapper = get_file(fd);
+  if (file_wrapper == NULL) {
+    lock_release (&file_lock);
+    return -1;
+  }
+  struct inode *inode = file_get_inode(file_wrapper->fileptr);
+  if (inode == NULL) {
+    lock_release (&file_lock);
+    return -1;
+  }
+
+  lock_release (&file_lock);
+  return inode_get_inumber (inode);
+  
+}
+
 
 /* Copies a byte from user address USRC to kernel address DST.  USRC must
    be below PHYS_BASE.  Returns true if successful, false if a segfault
@@ -421,28 +553,3 @@ static void copy_in (void *dst_, const void *usrc_, size_t size) {
 
     }
 }
-
-
-
-/* Creates a copy of user string US in kernel memory and returns it as a
-   page that must be **freed with palloc_free_page()**.  Truncates the string
-   at PGSIZE bytes in size.  Call thread_exit() if any of the user accesses
-   are invalid. */
-/*static char *
-copy_in_string (const char *us)
-{
-  char *ks;
-
-  ks = palloc_get_page (0);
-  if (ks == NULL)
-    thread_exit ();
-
-  for (uint i = 0; i < PGSIZE; i++) {
-    if (!get_user((uint8_t *)(ks + i), (const uint8_t *)(us + i))) thread_exit();
-    if (*(ks + i) == '\x00') break;
-  }
-  return ks;
-
-  // TODO: don't forget to call palloc_free_page(..) when you're done
-  // with this page, before you return to user from syscall
-  }*/

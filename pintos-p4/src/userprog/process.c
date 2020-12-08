@@ -300,10 +300,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_name_copy, file_name, 60);
   char* save_ptr;
   char* file_name_real = strtok_r ( file_name_copy, " ", &save_ptr);
+  lock_acquire(&file_lock);
   DEBUG_PRINT(("IN LOAD, ABOUT TO RUN FILESYS_OPEN\n"));
   struct inode* fn_inode = filesys_open(file_name_real);
   if (fn_inode == NULL) {
     DEBUG_PRINT(("IN LOAD, FILESYS_OPEN FAILED\n"));
+    lock_release(&file_lock);
     goto done;
   }
   DEBUG_PRINT(("IN LOAD, ABOUT TO RUN FILE_OPEN\n"));
@@ -312,11 +314,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     DEBUG_PRINT(("IN LOAD, FILE_OPEN FAILED\n"));
     inode_close(fn_inode);
     printf ("load: %s: open failed\n", file_name);
+    lock_release(&file_lock);
     goto done;
   }
   DEBUG_PRINT(("IN LOAD, RAN FILE_OPEN\n"));
 
   file_deny_write (file);
+  lock_release(&file_lock);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr

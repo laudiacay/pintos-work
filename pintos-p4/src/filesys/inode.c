@@ -439,8 +439,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       else
         {
           memcpy (buffer + bytes_read, block + sector_ofs, chunk_size);
+          free(block);
         }
-
       /* Advance. */
       size -= chunk_size;
       offset += chunk_size;

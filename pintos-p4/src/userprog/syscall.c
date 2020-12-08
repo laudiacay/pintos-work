@@ -2,6 +2,7 @@
 #include "userprog/pagedir.h"
 #include "threads/vaddr.h"
 #include "filesys/file.h"
+#include "filesys/directory.h"
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
@@ -42,7 +43,6 @@ void check_ptr(const void *ptr);
 void check_str (const void* str);
 struct file_in_thread* get_file(int fd);
 
-bool lock_initialized = false;
 
 struct file_in_thread {
   struct file *fileptr;
@@ -117,10 +117,6 @@ static void
 syscall_handler (struct intr_frame *f)
 {
   // printf("in syscall_handler, esp = %p\n", f->esp);
-  if (!lock_initialized) {
-    lock_init(&file_lock);
-    lock_initialized = true;
-  }
   unsigned call_nr = 0;
   static int(*syscall)(uint8_t *);
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.

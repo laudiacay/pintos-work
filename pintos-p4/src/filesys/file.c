@@ -2,6 +2,7 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 #ifndef DEBUG_BULLSHIT
 #define DEBUG_BULLSHIT
@@ -84,8 +85,10 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
+  //DEBUG_PRINT(("IN FILE_READ, file->pos = %d\n", file->pos));
   off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_read;
+  //DEBUG_PRINT(("FINISHED IN FILE_READ, file->pos = %d\n", file->pos));
   return bytes_read;
 }
 

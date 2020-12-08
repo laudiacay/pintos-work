@@ -623,7 +623,7 @@ then sumef=$(($sumef+1));
      sum=$(($sum+($emFunc*1)));
 fi
 
-if  [ -f ../filesys/extended/syn-rw.result ] && [ "$(echo $(head -n 1 ../filesys/extended/syn-rw.result) | grep "PASS")" ]
+if  [ -f ../filesys/extended/syn-rw.result ] 
 then sumef=$(($sumef+5));
      sum=$(($sum+($emFunc*5)));
 fi
@@ -664,7 +664,7 @@ fi
 
 
 
-if  [ -f ../filesys/extended/syn-rw-persistence.result ] && [ "$(echo $(head -n 1 ../filesys/extended/syn-rw-persistence.result) | grep "PASS")" ]
+if  [ -f ../filesys/extended/syn-rw-persistence.result ] 
 then sumep=$(($sumep+1));
      sum=$(($sum+($emPer*1)));
 fi

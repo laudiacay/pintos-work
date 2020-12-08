@@ -305,6 +305,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   struct inode* fn_inode = filesys_open(file_name_real);
   if (fn_inode == NULL) {
     DEBUG_PRINT(("IN LOAD, FILESYS_OPEN FAILED\n"));
+    printf ("load: %s: open failed\n", file_name);
     lock_release(&file_lock);
     goto done;
   }

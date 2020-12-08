@@ -248,7 +248,17 @@ filesys_remove (const char *name)
 bool
 filesys_chdir (const char *name)
 {
-  return false;
+
+  struct inode* dir_inode = resolve_name_to_inode (name);
+  if (!dir_inode) return false;
+  struct dir* dir = dir_open(dir_inode);
+  if (!dir) {
+    inode_close(dir_inode);
+    return false;
+  }
+  thread_current ()->wd = inode_get_inumber(dir_get_inode(dir));
+  dir_close(dir);
+  return true;
 }
 
 /* Formats the file system. */

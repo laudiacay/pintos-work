@@ -31,7 +31,7 @@ int inode_open_cnt (const struct inode *);
 void inode_lock (struct inode *);
 void inode_unlock (struct inode *);
 //static void calculate_indices (off_t, size_t *, size_t *);
-//static bool get_data_block (struct inode *, off_t, bool,
+//static bool get_data_block (struct inode *, off_t, bool, 
 //                void **, block_sector_t *);
 
 #endif /* filesys/inode.h */

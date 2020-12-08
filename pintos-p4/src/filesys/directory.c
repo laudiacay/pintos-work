@@ -6,7 +6,16 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
+#include "threads/thread.h"
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %d ", thread_current()->tid); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
 /* A directory. */
 struct dir
   {
@@ -54,17 +63,20 @@ dir_create (block_sector_t sector, block_sector_t parent_sector)
 struct dir *
 dir_open (struct inode *inode)
 {
-  struct dir *dir = calloc (1, sizeof *dir);
+  DEBUG_PRINT(("DIR OPEN: %d\n", inode_get_inumber(inode)));
+  struct dir *dir = (struct dir*)calloc (1, sizeof(struct dir));
   if (inode != NULL && dir != NULL && inode_get_type (inode) == DIR)
     {
       dir->inode = inode;
       dir->pos = 0;
+      DEBUG_PRINT(("FINISHED DIR OPEN: %d\n", inode_get_inumber(inode)));
       return dir;
     }
   else
     {
       inode_close (inode);
       free (dir);
+      DEBUG_PRINT(("FAILED DIR OPEN\n"));
       return NULL;
     }
 }
@@ -74,7 +86,9 @@ dir_open (struct inode *inode)
 struct dir *
 dir_open_root (void)
 {
-  return dir_open (inode_open (ROOT_DIR_SECTOR));
+  struct inode* inode = inode_open(ROOT_DIR_SECTOR);
+  if (!inode) return NULL;
+  return dir_open (inode);
 }
 
 /* Opens and returns a new directory for the same inode as DIR.
@@ -82,17 +96,21 @@ dir_open_root (void)
 struct dir *
 dir_reopen (struct dir *dir)
 {
+  DEBUG_PRINT(("DIR REOPEN: %d\n", inode_get_inumber(dir->inode)));
   return dir_open (inode_reopen (dir->inode));
+  DEBUG_PRINT(("FINISHED DIR REOPEN: %d\n", inode_get_inumber(dir->inode)));
 }
 
 /* Destroys DIR and frees associated resources. */
 void
 dir_close (struct dir *dir)
 {
+  DEBUG_PRINT(("DIR CLOSE: %d\n", inode_get_inumber(dir->inode)));
   if (dir != NULL) {
       inode_close (dir->inode);
       free (dir);
     }
+  DEBUG_PRINT(("FINISHED DIR CLOSE\n"));
 }
 
 /* Returns the inode encapsulated by DIR. */

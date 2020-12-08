@@ -13,7 +13,7 @@
 #define DEBUG_BULLSHIT
 #ifdef DEBUG
 #include <stdio.h>
-# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+# define DEBUG_PRINT(x) printf("THREAD: %d ", thread_current()->tid); printf x 
 #else
 # define DEBUG_PRINT(x) do {} while (0)
 #endif
@@ -90,7 +90,6 @@ get_next_part (char part[NAME_MAX], const char **srcp)
    Returns true if successful, false on failure.
    Stores the directory corresponding to the name into *DIRP,
    and the file name part into BASE_NAME. */
-// TODO: HANDLE RELATIVE FILENAMES
 static bool
 resolve_name_to_entry (const char *name,
                        struct dir **dirp, char base_name[NAME_MAX + 1])
@@ -100,8 +99,8 @@ resolve_name_to_entry (const char *name,
     DEBUG_PRINT(("STARTING FROM ROOT DIR\n"));
     *dirp = dir_open_root();
   } else {
+    DEBUG_PRINT(("STARTING FROM CWD: %d\n", thread_current()->wd));
     *dirp = dir_open(inode_open(thread_current() -> wd));
-    DEBUG_PRINT(("STARTING FROM CWD\n"));
   }
   if (*dirp == NULL) {
     base_name[0] = '\0';
@@ -115,7 +114,6 @@ resolve_name_to_entry (const char *name,
   int status;
   while(true) {
     status = get_next_part(next_part, &name);
-    DEBUG_PRINT(("get_next_part gave me %s and status %d\n", next_part, status));
     if (status == 0) {
       strlcpy(base_name, last_part, NAME_MAX+1);
       return true;
@@ -160,6 +158,7 @@ resolve_name_to_inode (const char *name)
   if (!resolve_name_to_entry(name, &dirp, base_name)) {
     return NULL;
   }
+  DEBUG_PRINT(("RESOLVED NAME TO ENTRY FOR %s\n", name));
   struct inode* inode = malloc(sizeof(inode));
 
   DEBUG_PRINT(("ABOUT TO DIR_LOOKUP THE INODE!\n"));
@@ -169,6 +168,7 @@ resolve_name_to_inode (const char *name)
     return NULL;
   }
   DEBUG_PRINT(("SUCCESSFULLY RESOLVED NAME TO INODE!\n"));
+  dir_close(dirp);
   return inode;
 }
 
@@ -176,20 +176,42 @@ resolve_name_to_inode (const char *name)
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
-// sticks shit in root dir i guess uwu
 bool
 filesys_create (const char *name, off_t initial_size, enum inode_type inode_type) 
 {
-  block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (&inode_sector)
-                  && inode_create (inode_sector, initial_size, inode_type)
-                  && dir_add (dir, name, inode_sector));
-  if (!success && inode_sector != 0) 
-    free_map_release (inode_sector);
-  dir_close (dir);
+  struct dir* dirp;
+  char base_name[NAME_MAX + 1];
+  if (!resolve_name_to_entry(name, &dirp, base_name)) return false;
 
+  struct inode* inode;
+
+  if (dir_lookup(dirp, base_name, &inode)) {
+    // file exists, oh no!
+    dir_close(dirp);
+    inode_close(inode);
+    return false;
+  }
+
+  block_sector_t place_for_inode;
+  if (!free_map_allocate(&place_for_inode)) {
+      dir_close(dirp);
+      return false;
+  }
+  if (inode_type == FILE) {
+    inode = file_create(place_for_inode, initial_size);
+  } else{
+    inode = dir_create(place_for_inode, inode_get_inumber(dir_get_inode(dirp)));
+  }
+
+  if (inode == NULL) {
+    free_map_release(place_for_inode);
+    dir_close(dirp);
+    return false;
+  }
+
+  bool success = dir_add(dirp, base_name, place_for_inode);
+  dir_close(dirp);
+  inode_close(inode);
   return success;
 }
 

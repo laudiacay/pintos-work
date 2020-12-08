@@ -23,6 +23,16 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %d ", thread_current()->tid); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
+
 char* space = " ";
 
 /* Starts a new thread running a user program loaded from
@@ -290,15 +300,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_name_copy, file_name, 60);
   char* save_ptr;
   char* file_name_real = strtok_r ( file_name_copy, " ", &save_ptr);
-  t->exe_file = file = file_open(filesys_open (file_name_real));
+  DEBUG_PRINT(("IN LOAD, ABOUT TO RUN FILESYS_OPEN\n"));
+  struct inode* fn_inode = filesys_open(file_name_real);
+  if (fn_inode == NULL) {
+    DEBUG_PRINT(("IN LOAD, FILESYS_OPEN FAILED\n"));
+    goto done;
+  }
+  DEBUG_PRINT(("IN LOAD, ABOUT TO RUN FILE_OPEN\n"));
+  t->exe_file = file = file_open(fn_inode);
+  if (file == NULL) {
+    DEBUG_PRINT(("IN LOAD, FILE_OPEN FAILED\n"));
+    inode_close(fn_inode);
+    printf ("load: %s: open failed\n", file_name);
+    goto done;
+  }
+  DEBUG_PRINT(("IN LOAD, RAN FILE_OPEN\n"));
 
-  if (file == NULL) 
-    {
-      printf ("load: %s: open failed\n", file_name);
-      //jankjankjankjankjank
-      //t->exitstatus = -1;
-      goto done; 
-    }
   file_deny_write (file);
 
   /* Read and verify executable header. */

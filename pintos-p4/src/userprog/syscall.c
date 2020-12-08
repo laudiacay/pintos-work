@@ -51,6 +51,17 @@ struct file_in_thread {
   struct list_elem file_elem;
 };
 
+
+#ifndef DEBUG_BULLSHIT
+#define DEBUG_BULLSHIT
+#ifdef DEBUG
+#include <stdio.h>
+# define DEBUG_PRINT(x) printf("THREAD: %d ", thread_current()->tid); printf x 
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+#endif
+
 struct file_in_thread*
 get_file(int fd) {
   struct thread *cur = thread_current();
@@ -110,7 +121,6 @@ syscall_handler (struct intr_frame *f)
     lock_init(&file_lock);
     lock_initialized = true;
   }
-
   unsigned call_nr = 0;
   static int(*syscall)(uint8_t *);
   copy_in (&call_nr, f->esp, sizeof call_nr); // See the copy_in function implementation below.
@@ -172,6 +182,7 @@ static void sys_halt (uint8_t* args_start UNUSED) {
 
 static pid_t sys_exec (uint8_t* args_start) {
   
+  DEBUG_PRINT(("SYS_EXEC\n"));
   char *cmd_line;
   copy_in (&cmd_line, args_start, sizeof(char*));
   check_str(cmd_line);
@@ -193,6 +204,7 @@ static pid_t sys_exec (uint8_t* args_start) {
     // child->exit_flag = 1;
     return -1;
   }
+  DEBUG_PRINT(("RETURN SYS_EXEC\n"));
 
   return process_id;
 
@@ -205,6 +217,7 @@ static int sys_wait (uint8_t* args_start) {
 }
 
 static bool sys_create (uint8_t* args_start) {
+  DEBUG_PRINT(("SYS_CREATE\n"));
   char *file_name;
   unsigned size;
   copy_in (&file_name, args_start, sizeof(char*));
@@ -216,10 +229,12 @@ static bool sys_create (uint8_t* args_start) {
   lock_acquire(&file_lock);
   bool status = filesys_create(file_name, size, FILE);
   lock_release(&file_lock);
+  DEBUG_PRINT(("RETURN SYS_CREATE\n"));
   return status;
 }
 
 static bool sys_remove (uint8_t* args_start) {
+  DEBUG_PRINT(("SYS_REMOVE\n"));
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
   check_ptr(file_name);
@@ -227,6 +242,7 @@ static bool sys_remove (uint8_t* args_start) {
   lock_acquire(&file_lock);
   bool status = filesys_remove(file_name);
   lock_release(&file_lock);
+  DEBUG_PRINT(("RETURN SYS_REMOVE\n"));
   return status;
 }
 
@@ -310,6 +326,7 @@ static int sys_exit(uint8_t* args_start) {
 }
 
 static int sys_open(uint8_t* args_start) {
+  DEBUG_PRINT(("SYS_OPEN\n"));
   char *file_name;
   copy_in (&file_name, args_start, sizeof(char*));
 
@@ -328,6 +345,7 @@ static int sys_open(uint8_t* args_start) {
   thread_current()->fd++;
   list_push_back(&thread_current()->file_list, &new_file->file_elem);
   lock_release(&file_lock);
+  DEBUG_PRINT(("FINISHED SYS_OPEN\n"));
   return new_file->fd;
 }
 
@@ -373,6 +391,7 @@ static unsigned sys_tell (uint8_t* args_start) {
 }
 
 static void sys_close (uint8_t* args_start) {
+  DEBUG_PRINT(("SYS_CLOSE\n"));
   int fd;
   copy_in (&fd, args_start, sizeof(int));
 
@@ -386,6 +405,7 @@ static void sys_close (uint8_t* args_start) {
   list_remove(&file->file_elem);
   free(file);
   lock_release(&file_lock);
+  DEBUG_PRINT(("RETURN SYS_CLOSE\n"));
 }
 
 static bool

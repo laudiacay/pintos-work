@@ -7,7 +7,7 @@
 #define DEBUG_BULLSHIT
 #ifdef DEBUG
 #include <stdio.h>
-# define DEBUG_PRINT(x) printf("THREAD: %p ", thread_current()); printf x 
+# define DEBUG_PRINT(x) printf("THREAD: %d ", thread_current()->tid); printf x 
 #else
 # define DEBUG_PRINT(x) do {} while (0)
 #endif
@@ -22,15 +22,8 @@ struct file
   };
 
 struct inode *file_create (block_sector_t sector, off_t length) {
-  // ....
   struct inode* inode = inode_create (sector, length, FILE);
-  // making sure i can write at every page in the file....?
-  // FIXME>???
-  //unsigned n_pages = length / BLOCK_SIZE
-  //for (off_t i = 0; off_t <= )
-  
-  //if (length != inode_write_at (inode, )
-  // ....
+  // FIXME???
   return inode;
 }
 

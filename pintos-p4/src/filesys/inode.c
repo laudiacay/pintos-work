@@ -168,7 +168,7 @@ inode_open (block_sector_t sector)
     }
 
   /* Allocate memory. */
-  inode = malloc (sizeof *inode);
+  inode = (struct inode*)malloc (sizeof(struct inode));
   if (inode == NULL) {
     lock_release(&open_inodes_lock);
     return NULL;
@@ -332,7 +332,7 @@ calculate_indices (off_t sector_idx, size_t offsets[], size_t *offset_cnt)
     offsets[2] = sector_idx % PTRS_PER_SECTOR;
     *offset_cnt = 3;
   }
-  DEBUG_PRINT(("IN CALC INDICES! sector_idx: %d, offset_cnt: %d, off0: %d, off1: %d, off2: %d\n", sector_idx, *offset_cnt, offsets[0], offsets[1], offsets[2]));
+  //  DEBUG_PRINT(("IN CALC INDICES! sector_idx: %d, offset_cnt: %d, off0: %d, off1: %d, off2: %d\n", sector_idx, *offset_cnt, offsets[0], offsets[1], offsets[2]));
 }
 
 void

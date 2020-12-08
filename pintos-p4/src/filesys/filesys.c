@@ -95,36 +95,53 @@ static bool
 resolve_name_to_entry (const char *name,
                        struct dir **dirp, char base_name[NAME_MAX + 1])
 {
+  DEBUG_PRINT(("resolving %s\n", name));
   if (name[0] == '/') {
+    DEBUG_PRINT(("STARTING FROM ROOT DIR\n"));
     *dirp = dir_open_root();
   } else {
     *dirp = dir_open(inode_open(thread_current() -> wd));
+    DEBUG_PRINT(("STARTING FROM CWD\n"));
   }
-  struct inode* next_dir;
+  if (*dirp == NULL) {
+    base_name[0] = '\0';
+    return false;
+  }
+  bool first_loop = true;
+  char next_part[NAME_MAX + 1];
+  char last_part[NAME_MAX + 1];
+  struct inode* put_inode_here;
+  struct dir* tmp;
   int status;
   while(true) {
-    status = get_next_part(base_name, &name);
+    status = get_next_part(next_part, &name);
+    DEBUG_PRINT(("get_next_part gave me %s and status %d\n", next_part, status));
+    if (status == 0) {
+      strlcpy(base_name, last_part, NAME_MAX+1);
+      return true;
+    }
     if (status == -1) {
         dir_close(*dirp);
         *dirp = NULL;
+        base_name[0] = '\0';
         return false;
       }
-    if (status == 0) {
-      return true;
+    if (!first_loop) {
+      if (dir_lookup(*dirp, last_part, &put_inode_here)) {
+        // update dirp and keeeep walkin
+        tmp = *dirp;
+        *dirp = dir_open(put_inode_here);
+        dir_close(tmp);
+      } else {
+        dir_close(*dirp);
+        *dirp = NULL;
+        base_name[0] = '\0';
+        return false;
+      }
     }
-    *dirp = dir_open(next_dir);
-    if (*dirp == NULL) {
-      return false;
-    }
-    if (dir_lookup(*dirp, base_name, &next_dir)) {
-      // update dirp and keeeep walkin
-      dir_close(*dirp);
-    } else {
-      dir_close(*dirp);
-      return false;
-    }
+    first_loop = false;
+    strlcpy(last_part, next_part, NAME_MAX+1);
   }
-
   return false;
 }
 
@@ -154,6 +171,7 @@ resolve_name_to_inode (const char *name)
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
+// sticks shit in root dir i guess uwu
 bool
 filesys_create (const char *name, off_t initial_size, enum inode_type inode_type) 
 {
@@ -161,7 +179,7 @@ filesys_create (const char *name, off_t initial_size, enum inode_type inode_type
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
                   && free_map_allocate (&inode_sector)
-                  && inode_create (inode_sector, initial_size, FILE)
+                  && inode_create (inode_sector, initial_size, inode_type)
                   && dir_add (dir, name, inode_sector));
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector);

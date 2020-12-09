@@ -237,7 +237,7 @@ filesys_remove (const char *name)
   struct dir* dirp;
   char base_name[NAME_MAX + 1];
   if (!resolve_name_to_entry(name, &dirp, base_name)) return false;
-  bool success = dirp != NULL && dir_remove (dirp, name);
+  bool success = dirp != NULL && dir_remove (dirp, base_name);
 
   dir_close (dirp); 
   return success;

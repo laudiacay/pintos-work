@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "devices/block.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -104,7 +105,7 @@ struct thread
     struct semaphore load_semaphore;
     int loaded; // 0 = not loaded, -1 = fail, 1 = loaded
     int fd;
-    int wd;
+    block_sector_t wd;
     struct list file_list;
     int exit_flag;
 

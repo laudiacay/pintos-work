@@ -267,6 +267,7 @@ dir_remove (struct dir *dir, const char *name)
     dir_close (dir_to_remove);
     if (!empty) goto done;
     if (open_cnt > 1) goto done;
+    if (inode_get_inumber(inode) == thread_current()->wd) goto done;
   }
 
   /* Erase directory entry. */

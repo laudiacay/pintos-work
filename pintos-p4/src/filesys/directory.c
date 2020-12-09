@@ -259,13 +259,14 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
-
   /* Verify that it is not an in-use or non-empty directory. */
   if (inode_get_type(inode) == DIR) {
     struct dir *dir_to_remove = dir_open(inode);
     bool empty = dir_is_empty(dir_to_remove);
+    int open_cnt = inode_get_opencnt (inode);
     dir_close (dir_to_remove);
     if (!empty) goto done;
+    if (open_cnt > 1) goto done;
   }
 
   /* Erase directory entry. */

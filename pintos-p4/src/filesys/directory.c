@@ -264,10 +264,10 @@ dir_remove (struct dir *dir, const char *name)
     struct dir *dir_to_remove = dir_open(inode);
     bool empty = dir_is_empty(dir_to_remove);
     int open_cnt = inode_get_opencnt (inode);
-    dir_close (dir_to_remove);
-    if (!empty) goto done;
-    if (open_cnt > 1) goto done;
-    if (inode_get_inumber(inode) == thread_current()->wd) goto done;
+    if (!empty || open_cnt > 1 || inode_get_inumber(inode) == thread_current()->wd) {
+      free(dir_to_remove);
+      goto done;
+    }
   }
 
   /* Erase directory entry. */

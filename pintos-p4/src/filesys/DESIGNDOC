@@ -118,10 +118,33 @@ do multiple disk read/write.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+/* A directory. */
+struct dir
+  {
+    struct inode *inode;                /* Backing store. */
+    off_t pos;                          /* Current position. */
+  };
+
+/* A single directory entry. */
+struct dir_entry
+  {
+    block_sector_t inode_sector;        /* Sector number of header. */
+    char name[NAME_MAX + 1];            /* Null terminated file name. */
+    bool in_use;                        /* In use or free? */
+  };
+
+struct thread {
+  block_sector_t wd; // cwd inode
+}
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
+
+keep grabbing a chunk up until the next /, if there's more, try to open that dir and keep going, if there's not, return the last component as the basename
+
+i just check if the first character is '/'
 
 ---- SYNCHRONIZATION ----
 
@@ -130,15 +153,21 @@ do multiple disk read/write.
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
+lock on inode editing for the directory inode, acquired at the start of reading/writing dir entries
+
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
 
+no, we check open_cnt <= 1 in dir_remove before trying to remove the directory entry.
+
 ---- RATIONALE ----
 
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
+
+we just stored the inode for the wd, it contains all the information we might need on disk. didn't really need to worry about whether the directory was open or not.
 
 			     BUFFER CACHE
 			     ============
@@ -183,6 +212,8 @@ the quarter.
 
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
+
+this was the easiest so far but maybe just because i know how inside pintos works now? and also know how to use gdb? woohoo!
 
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?

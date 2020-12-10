@@ -8,9 +8,10 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+50% Partner #1: Claudia Richoux, laudecay@uchicago.edu
+50% Partner #2: Kate Hu, katehu@uchicago.edu
+Expected grade: 100
+
 
 ---- PRELIMINARIES ----
 
@@ -29,14 +30,48 @@ FirstName LastName <email@domain.example>
 >> A1: Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
+DIRECT_CNT   // number of direct blocks
+INDIRECT_CNT   // number of indirect blocks
+DBL_INDIRECT_CNT  // number of doubly indirect blocks
+// total number of sectors within the inode structure
+#define SECTOR_CNT (DIRECT_CNT + INDIRECT_CNT + DBL_INDIRECT_CNT)
+// number of entries per sector
+#define PTRS_PER_SECTOR ((off_t) (BLOCK_SECTOR_SIZE / sizeof (block_sector_t)))
+// max file size the inode can contain
+#define INODE_SPAN ((DIRECT_CNT                                              \
+                     + PTRS_PER_SECTOR * INDIRECT_CNT                        \
+                     + PTRS_PER_SECTOR * PTRS_PER_SECTOR * DBL_INDIRECT_CNT) \
+                    * BLOCK_SECTOR_SIZE)
+// whether the inode represents a file or directory
+enum inode_type
+{
+	FILE,         /* Ordinary file. */
+	DIR           /* Directory. */
+};
+
+struct inode 
+{
+	struct lock deny_write_lock; // control access to deny_write_cnt
+	struct condition no_writers_cond; // indicates whether the inode has writers
+	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+	int writer_cnt;  // number of writers
+};
+
+static struct lock open_inodes_lock; // control access to the open inodes list
 
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
+(123 + 1 * (1/2kb / 4 bytes) + 1 * (1/2kb / 4 bytes)^2) = 16635
+This is the number of pointers in the inode.
+Each pointer points to a block, each block is 1/2 kb, so the max
+size is 16635 * 1/2kb = 8317.5kb
 
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
+We use a filesys lock so that only one process at a time can 
+access the file write function to extend file.
 
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
@@ -44,6 +79,10 @@ FirstName LastName <email@domain.example>
 >> may not read data other than what B writes, e.g. if B writes
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
+We only update the inode's length field after all the writes have
+been completed, so A will not see any data if it reads while B 
+is writing. If it reads after B has finished, it can see the
+entire extension.
 
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
@@ -51,6 +90,11 @@ FirstName LastName <email@domain.example>
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+We make sure that locks are only used to protect the necessary
+critical section. Also we didn't use condition variable to coordinate
+readers and writers so they don't need to wait for each other, and
+they are treated as the same when trying to acquire a lock.
+
 
 ---- RATIONALE ----
 
@@ -59,6 +103,11 @@ FirstName LastName <email@domain.example>
 >> indirect blocks?  If not, why did you choose an alternative inode
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
+Yes, our choice is arbitrary since we just followed the inode structure
+provided in the guide. But it would be a good design if the most common
+file size can fit in the direct blocks. That would make read/write faster
+since for most flies it doesn't need to traverse the indirect blocks and
+do multiple disk read/write.
 
 			    SUBDIRECTORIES
 			    ==============
